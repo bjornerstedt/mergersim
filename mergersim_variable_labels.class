@@ -1,0 +1,48 @@
+/***************************
+
+MERGER SIMULATION PACKAGE FOR STATA
+Jonas Björnerstedt and Frank Verboven
+
+
+$Id: mergersim_variable_labels.class 194 2013-04-22 11:44:06Z d3687-mb $
+
+***************************/
+version 11.2
+
+class mergersim_variable_labels {
+	string price = "Pre-merger price"
+	string quantity = "Pre-merger quantity"
+	string revenue = "Pre-merger revenue"
+	string share = "Product shares"
+	string logprice = "Log Pre-merger price"
+	string ls = "log(share of product / share outside good)"
+	string shareoutside = "Share of outside good"
+	string delta = "Utility - price effect"
+	string costs = "Marginal costs"
+	string price1 = "Predicted Pre-merger price"
+	string quantity1 = "Predicted Pre-merger quantity"
+	string costs1 = "Predicted Pre-merger costs"
+	string compcosts = "Compensating cost"
+	string price2 = "Post-merger price"
+	string quantity2 = "Post-merger quantity"
+	string costs2 = "Cost with efficiencies"
+ 	string firm2 = "Post-merger ownership" 
+	string price_ch = "Price change"
+	string lerner = "Pre-merger Lerner"
+	string lerner2 = "Post-merger Lerner"
+	string marketsh = "Pre-merger share"
+	string marketsh2 = "Post-merger share"
+	string marketsh_ch = "Share change"
+	string simiterations = "Number of iterations in simulation"
+	string lsjg = "log (share of product j in group g)"
+	string lsjh = "log (share of product j in subgroup h)"
+	string lshg = "log (share of subgroup h in group g)"
+	string ejj = "Own-price elasticity"
+	string ejk = "Within own group cross-price elasticity"
+	string ejl = "Other group in same nest elasticity"
+	string ejm = "Other nest elasticity"
+	string mre = "Minimum required efficiency"
+	string result = "Pre-merger"
+	string result2 = "Post-merger"
+	string result_ch = "Percentage change"
+}

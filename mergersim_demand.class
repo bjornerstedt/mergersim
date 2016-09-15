@@ -1,0 +1,69 @@
+/***************************
+
+MERGER SIMULATION PACKAGE FOR STATA
+Jonas Björnerstedt and Frank Verboven
+
+
+$Id: mergersim_demand.class 189 2013-04-17 10:05:45Z d3687-mb $
+
+***************************/
+version 11.2
+
+class mergersim_demand {
+	double valueshares // Required: For value and quantity shares
+
+	string prefix
+	string market
+	string price 
+	string quantity 
+	string revenue
+	string groupvar // used for jointelasticities
+
+	string pricevar
+	string cmdline // Saves demand estimation to display in mergersim_market
+	string depvar
+	
+	string demanddesc
+	string mata 
+}
+
+**************************************************************************************
+
+program .init , rclass
+end
+
+program .cleanup
+end
+
+program .init_output 
+end
+
+program .market_output , rclass
+end	
+
+program .getdemand, rclass	
+end	
+
+program .get_estimate, rclass
+	syntax varlist
+
+	matrix define bfull = e(b)
+	matrix define cfull = e(V)
+
+	tempvar A B V
+
+	capture matrix drop `A'
+	capture matrix drop `B'
+	local nests -1
+	foreach var1 of varlist `varlist' {
+		local ++nests
+		matrix `A' = nullmat(`A'), cfull[., "`var1'"]	
+		matrix `B' = nullmat(`B'), bfull[., "`var1'"]	
+	}
+	foreach var1 of varlist `varlist' {
+			matrix `V' = nullmat(`V') \ `A'[ "`var1'", .]	
+	}
+	return local nests = `nests'
+	return matrix b = `B', copy
+	return matrix V = `V', copy
+end

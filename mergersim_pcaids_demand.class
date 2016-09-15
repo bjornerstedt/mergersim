@@ -1,0 +1,98 @@
+/***************************
+
+MERGER SIMULATION PACKAGE FOR STATA
+Jonas Björnerstedt and Frank Verboven
+
+
+$Id: mergersim_pcaids_demand.class 193 2013-04-18 17:11:56Z d3687-mb $
+
+***************************/
+version 11.2
+
+class mergersim_pcaids_demand {
+	double valueshares // Required: For value and quantity shares
+
+	string prefix
+	string market
+	string price 
+	string quantity 
+	string revenue
+	
+	string e
+	string e11
+
+	string cmdline // Saves demand estimation to display in mergersim_market
+	string depvar
+	
+	string demanddesc
+	string mata 
+}, inherit(mergersim_demand)
+
+program .new
+	args mata prefix
+	.mata = "`mata'"
+	.prefix = "`prefix'"
+end
+
+**************************************************************************************
+
+program .init , rclass
+	syntax [namelist],   /// 
+	elasticities(numlist min=2 max=2 <0 )
+
+	
+	gettoken e elasticities : elasticities
+	gettoken e11 : elasticities
+	
+	mata: `.mata' = PcaidsDemand()
+
+	if `e' < `e11' {
+		di as error "ERROR: The market elasticity has to be smaller in absolute terms than the first product elasticity."
+		error 184
+	}
+	mata {
+		`.mata'.price = "`.price'"
+		`.mata'.quantity = "`.quantity'"
+		`.mata'.e = `e'
+		`.mata'.e11 = `e11'
+	}
+
+	return local marketsize `marketsize'
+	return scalar e = `e'
+	return scalar e11 = `e11'
+	return add
+end
+
+**************************************************************************************
+
+program .init_output , rclass
+	mata: `.mata'.parameters()
+	
+	local width 80
+	local a 1
+	local b 19
+	local c 39
+	local d 59	
+	.demanddesc = "PCAIDS Demand"
+	di "`.demanddesc'" 
+	di ""
+	di "Calibrated model"
+	di as text "e: " as result r(e)
+	di as text "e11: " as result r(e11)
+	di "{hline `width'}"
+	
+end
+
+**************************************************************************************
+
+program .getdemand, rclass	
+	// Cannot be  based on estimate
+end	
+
+program .market_output , rclass
+	// No real output
+end	
+
+program .cleanup	
+	// nothing to be done
+end

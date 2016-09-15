@@ -1,0 +1,6 @@
+d Merger Simulation
+d
+d Jonas Björnerstedt, Swedish Competition Authority
+d Frank Verboven, University of Leuven
+d 
+p mergersim Merger simulation
