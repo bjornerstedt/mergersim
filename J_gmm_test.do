@@ -17,6 +17,11 @@ local instr num* instrp* instrd*
 clonevar _`price' = `price' //  demeaned price has underscore, non-demeaned is needed for cost calc.
 gen sh = Xtablets / BL1
 
+xtivreg2 M_ls `exog' (`endog' = `instr'), fe  
+xtivreg2 M_ls `exog' (`endog' = `instr'), fe gmm robust
+
+
+***************************************************************
 * Demean vars:
 tempvar mv
 quietly {
@@ -26,27 +31,37 @@ foreach var of varlist M_ls `endog' `exog' `instr' {
 	drop `mv'
 }
 }
+* Gives same result as xtivreg2
+ivreg2 M_ls `exog' (`endog' = `instr')  
 
-* ivregress gmm M_ls `exog' (`endog' = `instr') , nocons
+* Here is the difference:
+ivregress 2sls M_ls `exog' (`endog' = `instr') , nocons 
+ivregress gmm M_ls `exog' (`endog' = `instr') , nocons 
+
 * reg M_ls `endog' `exog' 
+
 gmm (M_ls - {xb:`endog' `exog' } ), instruments(`instr' `exog' ,  noconstant)
 
+timer on 1
+
+****************************************************************
 * Get all parameters in M_ls:varname format:
 foreach var in `endog' `exog' {
 	local params `params' d:`var'
 }
 di "`params'"
 
-xtivreg2 M_ls `exog' (`endog' = `instr'), fe gmm 
+gmm J_resid, nequations(1) parameters(`params') ///
+instruments(`instr' `exog' date, noconstant) twostep ///
+winitial(unadjusted, independent) wmatrix(unadjusted) from(_`price' -1)  
 
-timer on 1
 
 * FE estimation of costs, with time as only parameter.
 * To estimate with single product firms, include price and share options:
-asdf
+
 gmm J_resid_mk, nequations(2) parameters(`params' c:time) ///
 instruments(`instr' `exog' date, noconstant) twostep ///
-winitial(unadjusted, independent) wmatrix(unadjusted) from(_`price' -1)  price(`price') share(sh) panel(product)
+winitial(unadjusted, independent) wmatrix(unadjusted) from(_`price' -1) // price(`price') share(sh) panel(product)
 
 timer off 1
 timer list
