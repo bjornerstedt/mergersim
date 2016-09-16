@@ -522,14 +522,17 @@ program .results  , rclass
 			label var `showvar' "`lbl`showvar''"
 		}
 		tabdisp `tablevar', c(`show') cellwidth(18) stubwidth(20) format(%9.3f) 
+		
 		tempvar names
 		capture decode `tablevar' , gen(`names')
 		if _rc == 0 {
+			replace `names'= "No name" if `names' == ""
 			mkmat `show' , rownames(`names') 
 		}
 		else {
 			mkmat `show' 
 		}
+		
 		foreach result in `show' {
 			matrix `result' = `result'' // Transpose to row vectors for estout
 			return matrix `result' = `result' 
