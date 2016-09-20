@@ -11,15 +11,15 @@ mergersim init, price(Ptablets)  quantity(Xtablets) marketsize(BL1) firm(product
 
 local price _`r(pricevar)'
 local endog `r(loggroupshares)'
-local exog  sw sm time marketing1 month2-month12
-local instr num* instrp* instrd*
+local exog  sw sm  marketing1 month2-month12
+local instr num* // instrp* instrd*
 
 clonevar `price' = `r(pricevar)' //  demeaned price has underscore, non-demeaned is needed for cost calc.
 gen sh = Xtablets / BL1
 
 xtivreg2 M_ls `exog' ( `price' `endog' = `instr'), fe  
 xtivreg2 M_ls `exog' ( `price' `endog' = `instr'), fe gmm robust
-
+exit
 ***************************************************************
 * Demean vars:
 tempvar mv
