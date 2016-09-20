@@ -523,9 +523,11 @@ program .results  , rclass
 		}
 		tabdisp `tablevar', c(`show') cellwidth(18) stubwidth(20) format(%9.3f) 
 		
+		* Add row names to results
 		tempvar names
 		capture decode `tablevar' , gen(`names')
 		if _rc == 0 {
+			* Handle missing value
 			replace `names'= "No name" if `names' == ""
 			mkmat `show' , rownames(`names') 
 		}
