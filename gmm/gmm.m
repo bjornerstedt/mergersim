@@ -37,3 +37,6 @@ demand.init();
 results = demand.estimate()
 demand.settings.estimateMethod = 'gmm';
 results = demand.estimate()
+
+% Estimate alpha nonlinearly
+gmm_funcs(demand);
