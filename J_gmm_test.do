@@ -19,7 +19,7 @@ gen sh = Xtablets / BL1
 
 xtivreg2 M_ls `exog' ( `price' `endog' = `instr'), fe  
 xtivreg2 M_ls `exog' ( `price' `endog' = `instr'), fe gmm robust
-exit
+
 ***************************************************************
 * Demean vars:
 tempvar mv
@@ -58,9 +58,20 @@ instruments(`instr' `exog' , noconstant) twostep ///
 winitial(unadjusted, independent) wmatrix(robust) from(`price' -1) 
 */
 
+* TSLS result:
 gmm J_resid_nested, nequations(1) parameters(d:`price') regressors(`endog' `exog' ) ///
 instruments(`instr' `exog' , noconstant) twostep ///
 winitial(identity) wmatrix(unadjusted) from(`price' -1) 
+
+tempvar delta
+matrix est = e(b)
+gen `delta' = M_ls - _Ptablets * est[1,1]
+reg `delta' `endog' `exog' 
+
+* GMM result:
+gmm J_resid_nested, nequations(1) parameters(d:`price') regressors(`endog' `exog' ) ///
+instruments(`instr' `exog' , noconstant) twostep ///
+winitial(unadjusted) wmatrix(robust) from(`price' -1) 
 
 tempvar delta
 matrix est = e(b)
