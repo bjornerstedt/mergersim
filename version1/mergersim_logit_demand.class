@@ -1,0 +1,567 @@
+/***************************
+
+MERGER SIMULATION PACKAGE FOR STATA
+Jonas Björnerstedt and Frank Verboven
+
+
+$Id: mergersim_logit_demand.class 213 2013-10-16 14:17:41Z d3687-mb $
+
+***************************/
+version 11.2
+
+class mergersim_logit_demand {
+	double valueshares // Required: For value and quantity shares
+
+	string prefix
+	string market
+	string price 
+	string quantity 
+	string revenue
+	
+	string alpha
+	string sigma1
+	string sigma2
+
+	string loggroupshares	
+	string pricevar
+	string cmdline // Saves demand estimation to display in mergersim_market
+	string depvar
+	
+	string demanddesc
+	string mata 
+}, inherit(mergersim_demand)
+
+program .new
+	args mata prefix
+	.mata = "`mata'"
+	.prefix = "`prefix'"
+end
+
+**************************************************************************************
+
+program .init , rclass
+	syntax [namelist],   /// 
+	Marketsize(varname numeric) [ /// Required
+	CESdemand UNITdemand /// 
+	Nests(varlist numeric max=2) Alpha(numlist max=1 <0 ) Sigmas(numlist max=2 >=0 <=1) Delta(varname numeric) ///
+	]
+
+	if "`cesdemand'" != "" {
+		mata: `.mata' = CesLogitDemand()
+	}
+	else {
+		mata: `.mata' = LogitDemand()
+	}
+	
+	gettoken nest1 nests : nests
+	gettoken nest2 : nests
+	gettoken sigma1 sigmas : sigmas
+	gettoken sigma2 : sigmas
+	
+	if "`delta'" == "" {
+		local delta `.prefix'delta
+	}
+	if length("`nest2'")!=0 {
+		local nestlevel 2
+		.loggroupshares = "`.prefix'lsjh `.prefix'lshg"
+		if "`alpha'" != "" {
+			if "`sigma1'" == "" | "`sigma2'" == "" {
+				di as error "ERROR: Two sigmas have to be specified, corresponding to the nests"
+				error 184
+			}
+			.sigma1 = "`sigma1'"
+			.sigma2 = "`sigma2'"
+		}
+	}
+	else if length("`nest1'")!=0 {
+		local nestlevel 1
+		.loggroupshares = "`.prefix'lsjg"
+		if "`alpha'" != "" {
+			if "`sigma1'" == ""  {
+				di as error "ERROR: Sigma has to be specified, corresponding to the nest"
+				error 184
+			}
+			.sigma1 = "`sigma1'"
+		}
+	}
+	else {
+		local nestlevel 0
+	}
+	
+	if "`alpha'" != "" {
+		if `nestlevel' == 2 {
+			if `sigma2' > `sigma1' {
+				di as error "ERROR: sigma 2 should be smaller than sigma 1."
+				di as result "sigma1: `sigma1'"
+				di as result "sigma2: `sigma2'"
+			}
+		}
+		.alpha = "`alpha'"
+	}
+
+	if "`cesdemand'" != "" {
+		// Define pricevar so that model can be changed from ces to linear without changing the 
+		local ces = 1
+		.pricevar = "`.prefix'lp"
+		.valueshares = 1
+	}
+	else {
+		local ces = 0
+		.pricevar = "`.price'"
+		.valueshares = 0
+	}
+	
+	mata {
+		`.mata'.estimate = "`.prefix'demand_b"
+		`.mata'.variance = "`.prefix'demand_V"
+		`.mata'.delta = "`delta'"
+		`.mata'.nest1 = "`nest1'"
+		`.mata'.nest2 = "`nest2'"
+		`.mata'.marketsize = "`marketsize'"
+		`.mata'.nests = `nestlevel'
+		`.mata'.valueshares = `.valueshares'
+		`.mata'.ces = `ces'
+	}
+
+	.shares // Currently variables are required to create delta in logit_market		
+	return add
+
+	.depvar = "`.prefix'ls"
+	// Return macros from mergersim init
+	local returnopts  loggroupshares  pricevar depvar
+	foreach opt in `returnopts' {
+		return local `opt' "`.`opt''"
+	}	
+	return local nests `nests'
+	return local marketsize `marketsize'
+	return local ces `ces'
+	return add
+end
+
+**************************************************************************************
+
+program .init_output , rclass
+	mata: `.mata'.parameters()
+	local marketsize `r(marketsize)'
+	if r(ces) {
+		local demdesc "Constant expenditure"
+	}
+	else {
+		local demdesc "Unit demand"
+	}
+	if r(nestlevel) == 2 {
+		local leveldesc "two-level nested"
+	}
+	else if r(nestlevel) == 1 {
+		local leveldesc "one-level nested"
+	} 
+	else {
+		local leveldesc "unnested"
+	}
+	
+	local width 80
+	local a 1
+	local b 19
+	local c 39
+	local d 59	
+	.demanddesc = "`demdesc' `leveldesc' logit"
+	di "`.demanddesc'" 
+	di ""
+	if r(alpha) == . {
+		di _column(`a') ""  _column(`b') as text "Depvar" _column(`c') "Price" _column(`d') "Group shares" 
+		di _column(`b') "{hline 62}"
+		di _column(`a') "" _column(`b') as result "`.depvar'" _column(`c') "`.pricevar'" _column(`d') "`.loggroupshares'"
+	}
+	else {
+		di "Calibrated model"
+		di as text "alpha: " as result r(alpha)
+		if r(sigma1) != . {
+			di as text "sigma1: " as result r(sigma1)
+		}
+		if r(sigma2) != . {
+			di as text "sigma2: " as result r(sigma2)
+		}
+	}
+	di "{hline `width'}"
+	
+	// Warnings	
+	tempvar testvar
+	quietly generate `testvar' = ( `marketsize' & !e(sample))
+	quietly sum `testvar' , meanonly
+	if r(min) < 0 {
+		di as error "WARNING: Negative costs calculated"
+	}
+	return local dropvars ls lsjh lsjg lshg shareoutside lp sg shg hg // delta
+	
+end
+
+**************************************************************************************
+
+program .getdemand, rclass	
+	syntax [if] [in] [, predict]
+	marksample touse
+	// Get estimates from regression output if global sigmas not set
+	// Has to be handled here if mergersim_costs is invoked before cost estimation
+	mata: `.mata'.parameters()
+	local nestlevel = r(nestlevel)
+	local delta `r(delta)'
+
+	capture sum `.depvar' `.loggroupshares' , meanonly // simulate has deleted help vars
+	if _rc {
+		.shares
+	}
+	if "`.alpha'" == "" {
+		if "`e(depvar)'" != "`.prefix'ls" {
+			di as error "Either alpha() and sigmas() have to be specified or a regression with `.prefix'ls as depvar has to be in memory."
+			di as error "Regression depvar: `e(depvar)'"
+			di as error "Required depvar: `.prefix'ls"
+			error 111
+		}
+		.cmdline = "`e(cmdline)'"
+		if r(nestlevel) == 0 {
+			.get_estimate `.pricevar'
+
+		}
+		else {
+			capture .get_estimate `.pricevar' `.loggroupshares'
+			if _rc {
+				di as error "Could not find variables `.pricevar' `.loggroupshares' in the most recent regression results."
+				error _rc
+			}
+		}
+		matrix `.prefix'demand_b = r(b)
+		matrix `.prefix'demand_V = r(V)
+	}
+	else {
+		if "`.sigma1'" == "" {
+			matrix `.prefix'demand_b = (`.alpha')
+			matrix colnames `.prefix'demand_b = `.pricevar'
+		}
+		else if "`.sigma2'" == "" {
+			matrix `.prefix'demand_b = (`.alpha', `.sigma1')
+			matrix colnames `.prefix'demand_b = `.pricevar' `.loggroupshares'
+		}
+		else {
+			matrix `.prefix'demand_b = (`.alpha', `.sigma1', `.sigma2')
+			matrix colnames `.prefix'demand_b = `.pricevar' `.loggroupshares'
+		}
+		matrix rownames `.prefix'demand_b = "`.prefix'ls"
+	}
+	// Create utility variable and estimate vector
+	if "`predict'" != "" {
+		di "Uses predicted shares rather than actual." // Primary use is for forecasts.
+		tempvar logsharevar
+		quietly predict `logsharevar' if `touse', xbu		
+	}
+	else {
+		local logsharevar `.prefix'ls
+	}
+	tempvar deltavariation
+	matrix score `deltavariation' = `.prefix'demand_b
+	capture generate double `delta' = .
+	quietly replace `delta' = `logsharevar' - `deltavariation'
+	
+	return local newvars = "`delta'"
+end	
+
+**************************************************************************************
+
+program .market_output , rclass
+syntax [if] [in] [, *] 
+	local width 80
+	di as text "Demand: " as result "`.demanddesc'"
+	di "{hline `width'}"
+	if "`.cmdline'" != "" { 
+		di as text "Demand estimate" 
+		di as result "`.cmdline'"
+		di as result "Dependent variable: `.depvar'" 
+		di "{hline `width'}"
+	}
+	else {
+		di "Demand calibration" 
+	}
+	di ""
+	if "`options'" != "" {
+		local comma ,
+	}
+	.elasticities `if' `in' `comma' `options'
+	return add
+end	
+
+**************************************************************************************
+
+program .cleanup	
+	capture drop `.prefix'delta
+	// drop matrices
+end
+
+**************************************************************************************
+**************************************************************************************
+
+program .elasticities, rclass
+	syntax [if] [in] [, priceweights(varname numeric) keepvars ]
+	marksample touse
+	
+	mata: `.mata'.parameters()
+	local nestlevel = r(nestlevel)
+	local ces = r(ces)
+	local marketsize `r(marketsize)'
+	
+	local P `.pricevar'
+	
+	local localvars sg shg hg ejj ejk ejl ejm share
+ 	foreach localvar in `localvars' {
+		local `localvar' `.prefix'`localvar'
+	}
+		
+	local alpha  = el(`.prefix'demand_b,1,1)
+	if `nestlevel' > 0 {
+		local sigma1 = el(`.prefix'demand_b,1,2)
+	}
+	if `nestlevel' == 2 {
+		local sigma2 = el(`.prefix'demand_b,1,3)
+	} 
+
+	if "`priceweights'" != "" {
+		local priceweights "[fw=`priceweights']"
+		local averagetype "market averages weighted by `priceweights'"
+	}
+	else {
+		local averagetype "unweighted market averages"
+	}
+	quietly .shares , keepvars
+	//	mata: `.mata'.get_shares("`quantityvar'", "`touse'") // Define quantityvar first
+
+	local width 70
+	display as result "Parameters"	
+	display ""
+if `nestlevel' == 0 {
+	quietly {	
+	if `ces' {
+		gen `ejj' = `alpha'*(1 - `share') - 1
+		gen `ejk' = `alpha'*(  - `share')
+	}
+	else {
+		gen `ejj' = (`alpha')*(1 - `share')*`P'
+		gen `ejk' = (`alpha')*(  - `share')*`P'
+	}
+	}
+	display as text "alpha = " as result %-6.3f `alpha'
+	local elasticities `ejj' `ejk' 
+}
+else if `nestlevel' == 1 {
+	quietly {	
+	if `ces' {
+		gen `ejj' = (`alpha'/(1-`sigma1'))*(1 - `sigma1'*`sg' - (1-`sigma1')*`share') - 1
+		gen `ejk' = (`alpha'/(1-`sigma1'))*(  - `sigma1'*`sg' - (1-`sigma1')*`share')
+		gen `ejl' = (`alpha'/(1-`sigma1'))*(                  - (1-`sigma1')*`share')
+	}
+	else {
+		gen `ejj' = (`alpha'/(1-`sigma1'))*(1 - `sigma1'*`sg' - (1-`sigma1')*`share')*`P'
+		gen `ejk' = (`alpha'/(1-`sigma1'))*(  - `sigma1'*`sg' - (1-`sigma1')*`share')*`P'
+		gen `ejl' = (`alpha'/(1-`sigma1'))*(                  - (1-`sigma1')*`share')*`P'
+	}
+	}
+	display as text "alpha = " as result %-6.3f `alpha'
+	display as text "sigma1 = " as result %-6.3f `sigma1'
+	local elasticities `ejj' `ejk' `ejl'
+}
+else if `nestlevel' == 2 {
+	quietly {	
+	if `ces' {
+		gen `ejj' = `alpha'*(1/(1-`sigma1') - (1/(1-`sigma1') - 1/(1-`sigma2'))*`shg' - (`sigma2'/(1-`sigma2'))*`sg' - `share') - 1
+		gen `ejk' = `alpha'*(               - (1/(1-`sigma1') - 1/(1-`sigma2'))*`shg' - (`sigma2'/(1-`sigma2'))*`sg' - `share')
+		gen `ejl' = `alpha'*(                                                         - (`sigma2'/(1-`sigma2'))*`sg' - `share')
+		gen `ejm' = `alpha'*(                                                                                        - `share')
+	}
+	else {
+		gen `ejj' = `alpha'*(1/(1-`sigma1') - (1/(1-`sigma1') - 1/(1-`sigma2'))*`shg' - (`sigma2'/(1-`sigma2'))*`sg' - `share')*`P'
+		gen `ejk' = `alpha'*(               - (1/(1-`sigma1') - 1/(1-`sigma2'))*`shg' - (`sigma2'/(1-`sigma2'))*`sg' - `share')*`P'
+		gen `ejl' = `alpha'*(                                                         - (`sigma2'/(1-`sigma2'))*`sg' - `share')*`P'
+		gen `ejm' = `alpha'*(                                                                                        - `share')*`P'
+	}
+	}
+	display as text "alpha = " as result %-6.3f `alpha'
+	display as text "sigma1 = " as result %-6.3f `sigma1'
+	display as text "sigma2 = " as result %-6.3f `sigma2'
+	local elasticities `ejj' `ejk' `ejl' `ejm'
+}
+
+//mata: `.mata'.elasticities("`.M.price'", "`quantityvar'", "`touse'") // Define quantityvar first
+format `elasticities' %9.3f
+
+local width 64
+di "{hline `width'}"
+display "Own- and Cross-Price Elasticities:  `averagetype'"
+tabstat `elasticities' if `touse' `priceweights', stat(mean sd min max) col(stat) long save format // (%9,3f) 
+matrix elas = r(StatTotal)'
+matrix elas = elas[1..rowsof(elas),1...]
+return matrix elasticities = elas
+
+quietly count if `touse'
+di "Observations: " as result r(N)
+di "{hline `width'}"
+	*************************************************************
+	// Warnings
+	if `alpha' >= 0{
+		di as error "ERROR: Alpha should be negative."
+		di as result "alpha: `alpha'"
+	}
+	if `nestlevel' >= 1 {
+		if `sigma1' < 0 | `sigma1' >= 1 {
+			di as error "ERROR: sigma 1 should be between zero and one."
+			di as result "sigma1: `sigma1'"
+		}
+	}
+	if `nestlevel' == 2 {
+		if `sigma2' < 0 | `sigma2' >= 1 {
+			di as error "ERROR: sigma 2 should be between zero and one."
+			di as result "sigma2: `sigma2'"
+		}
+		if `sigma2' > `sigma1' {
+			di as error "ERROR: sigma 2 should be smaller than sigma 1."
+			di as result "sigma1: `sigma1'"
+			di as result "sigma2: `sigma2'"
+		}
+	}
+	capture drop `.prefix'sg
+	capture drop `.prefix'shg
+	capture drop `.prefix'hg
+
+	if "`keepvars'" == "" {
+		capture drop `ejj'
+		capture drop  `ejk'
+		capture drop  `ejl'
+		capture drop  `ejm'   
+	}
+end
+
+**************************************************************************************
+
+program .shares, rclass
+	syntax [if] [in] [, keepvars]
+	marksample touse
+	mata: `.mata'.parameters()
+	local nestlevel = r(nestlevel)
+	local marketsize `r(marketsize)'
+	local ces = r(ces)
+	local nest1 `r(nest1)'
+	local nest2 `r(nest2)'
+	
+	local filenames lp share sg shg hg ls lsjh lshg lsjg shareoutside
+ 	foreach localvar in `filenames' {
+		local `localvar' `.prefix'`localvar'
+		capture drop `.prefix'`localvar'
+	}
+	
+	tempvar totQ gtotQ hgtotQ ihgtotQ
+	
+	local newvars `newvars' `ls' 
+	if `ces' {
+		quietly generate double `lp' = log(`.price')
+		local newvars `newvars' `lp' 
+		if "`.revenue'" == "" {
+			tempvar Q
+			quietly generate `Q' = `.price'*`.quantity'
+		}
+		else {
+			local Q "`.revenue'"
+		}
+	}
+	else {
+		local Q "`.quantity'"
+	}
+	// mata: `.mata'.get_shares("`Q'", "")
+
+	
+	if "`.market'" != "" {
+		local bymarket ", by(`.market')"
+	}
+	egen `totQ' = sum(`Q') if `touse' `bymarket'	
+
+	*************************************************************
+	// Warnings
+	
+	tempvar testvar
+	quietly generate `testvar' = ( `marketsize' <= `totQ') if `touse'
+	quietly sum `testvar' if `touse', meanonly
+	if r(max) {
+		di as error "ERROR: Market size smaller than total quantities in sample."
+	}
+	*************************************************************
+
+	quietly generate double `share' = `Q'/`marketsize'
+	quietly generate double `shareoutside' = (`marketsize'-`totQ')/`marketsize'
+//	local newvars `newvars' `share' `shareoutside'
+	quietly sum `shareoutside' 
+	if r(min) < 0 {
+		display
+		display as error "Error: Negative quantities for outside good `marketsize'"
+		di "Minimum: " as result r(min)
+	}
+	
+	quietly generate double `ls' = log(`share'/`shareoutside')
+	
+	if `nestlevel' > 0  {
+		egen `gtotQ' = sum(`Q')  if `touse', by(`.market' `nest1')
+		generate double `sg' = `Q'/`gtotQ'
+
+		if `nestlevel' == 2  {
+			egen `hgtotQ' = sum(`Q')  if `touse', by(`.market' `nest2' `nest1')
+			generate double `shg' = `Q'/`hgtotQ'			// s_j/hg
+			generate double `hg' = `hgtotQ'/`gtotQ'		// s_h/g
+			generate double `lsjh' = log(`shg')
+			generate double `lshg' = log(`hg')
+			local newvars `newvars' `lsjh' `lshg'
+		}
+		else if `nestlevel' == 1 {
+			generate double `lsjg' = log(`sg')
+			local newvars `newvars' `lsjg' 
+		}
+	/*	Three level nests currently not implemented
+		// subsubgroup shares ihg
+		if "`nest3'" != "" {
+			egen `ihgtotQ' = sum(`Q'),by(`.market' `i' `h' `g')
+			generate double sihg = `Q'/`ihgtotQ'		// s_j/ihg
+			generate double ihg = `ihgtotQ'/`hgtotQ'		// s_i/hg
+			generate double lsihg = log(sihg)
+			generate double lihg = log(ihg)
+		}
+	*/
+	}
+	if "`keepvars'" == "" {
+		capture drop `.prefix'sg
+		capture drop `.prefix'shg
+		capture drop `.prefix'hg
+		capture drop `.prefix'share
+		capture drop `.prefix'shareoutside
+	}
+	// display generated variables
+	return local newvars "`newvars'" 	
+end
+
+**************************************************************************************
+
+program .get_estimate, rclass
+	syntax varlist
+
+	matrix define bfull = e(b)
+	matrix define cfull = e(V)
+
+	tempvar A B V
+
+	capture matrix drop `A'
+	capture matrix drop `B'
+	local nests -1
+	foreach var1 of varlist `varlist' {
+		local ++nests
+		matrix `A' = nullmat(`A'), cfull[., "`var1'"]	
+		matrix `B' = nullmat(`B'), bfull[., "`var1'"]	
+	}
+	foreach var1 of varlist `varlist' {
+			matrix `V' = nullmat(`V') \ `A'[ "`var1'", .]	
+	}
+	return local nests = `nests'
+	return matrix b = `B', copy
+	return matrix V = `V', copy
+end

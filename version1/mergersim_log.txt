@@ -1,0 +1,125 @@
+/***************************
+
+MERGER SIMULATION PACKAGE FOR STATA
+Jonas Björnerstedt and Frank Verboven
+
+$Id: mergersim_log.txt 183 2013-04-11 20:25:26Z d3687-mb $
+
+***************************/
+
+MERGERSIM PROGRAM REVISION LOG
+
+$Rev: 183 $
+
+Rev: 181
+
+* Added marketshares option to simulate
+* Made options in simulate independent of market
+
+Rev: 178 
+
+* Added demand subcommand with ssnip option
+* Changed newowner() to newfirm()
+* Tests that buyer & seller are specified unless newfirm() is used
+* buyereff and sellereff can no longer be specified when newfirm option is used
+* Changed costs() to newcosts() in simulate
+* newcosts() and efficiencies() cannot be used at the same time
+* Fixed error codes
+
+Rev: 169
+
+* mergersim_market tests that sigmas are between 0 and 1, warning otherwise
+* mergersim_market tests that sigma2 < sigma1, warning otherwise 
+* mergersim_market tests that alpha < 0
+* mergersim_market warns if market or simulate is run on data not in estimate sample
+* mergersim restructured to use Stata classes
+* mergersim_market tests that costs > 0, throwing error if not
+* mergersim_init tests that marketsize > totQ, throwing error if not
+* with the name() option one can specify name of simulation. The prefix() option no longer exists
+
+Rev: 153
+
+* Made class Market an array
+
+Rev: 149 
+
+* Fixed display of variables generated
+* Cleaning
+
+Rev: 147 
+
+* Added variable checking in mata code.
+* Fixed a bug in mergersim_mre allowing the user to omit necessary options
+* Renamed mergersim_predict to mergersim_equilibrium
+
+Rev: 145 
+
+* Tests that number of nests given by nests, alpha and sigma correspond.
+* init, market and simulate can be invoked in any order.
+
+Rev: 144
+
+* Work on including mergersim_predict
+
+Rev: 143
+
+* Improved mergerim_predict output
+* "Restored" output in init and market
+* Removed costs and set as allowed subcommands
+* Put common functionality in superclasses of Merger and Demand
+
+Rev: 142 
+
+* Added predict subcommand to calculate prices and quantities from costs and demand parameters.
+* Added utility xtcreatepanel.ado to create random panel dataset
+
+Rev: 141
+
+* Fixed strange Stata behavior with classes when explicitly run in compile.ado 
+* Variable labels loaded from .M class.
+* Renamed collusion to conduct.
+
+Rev: 140
+
+* Separated demand specific functionality in mergersim_costs
+* Renamed to mergersim_logit_elasticities
+
+Rev: 139 
+
+* Options alpha and sigmas now only allowed in mergersim_init.
+* Separated all demand specific calculations in separate methods
+* Created mergersim_logit.ado containing logit specific code as subcommands
+* General cleaning
+
+Rev: 138
+
+* All options with variables that are numeric (firm, price, etc...) are now required to be numeric.
+* Upper and lower bounds checked on buyereff, sellereff, collusion, newcollusion.
+* Input of alpha < 0 and 0 <= sigmas <= 1 now required.
+* Changed the number of iterations in non-convergence from maxit+1 to maxit.
+* Moved nonnestedgroup variable into Mata.
+
+Rev: 137
+
+* Removed a level of indirection in variable naming
+* Fixed maxit option.
+
+Rev: 136 
+
+* Refactored mergersim_init to separate out logit demand specific code.
+* Finished transforuuumation of globals to Stata class by removing indirection through locals.
+
+Rev: 135 
+
+* Renamed M_logprice to M_lp to better conform to mergersim naming
+* Only generate M_price, M_quantity and M_revenue if they do not exist
+
+Rev: 134
+
+* Fixed bug in mergersim_results.ado causing error with marketshares option.
+* Updated help file
+* Regression not shown if demand is calibrated
+* Improved output appearance, with generated variables at bottom
+* mergersim_results now uses variable labels as column headings
+* Better display of collusion and newcollusion in mergersim_simulate
+* Moved test of whether mergersim has been run to mergersim.ado

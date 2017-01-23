@@ -597,6 +597,8 @@ return matrix elasticities = elas
 
 quietly count if `touse'
 di "Observations: " as result r(N)
+quietly sum `.prefix'shareoutside
+di as text "Share outside good: " as result r(mean)
 di "{hline `width'}"
 	*************************************************************
 	// Warnings

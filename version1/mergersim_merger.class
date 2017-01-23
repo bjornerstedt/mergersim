@@ -1,0 +1,1094 @@
+/***************************
+
+MERGER SIMULATION PACKAGE FOR STATA
+Jonas Björnerstedt and Frank Verboven
+
+
+$Id: mergersim_merger.class 218 2013-11-13 13:28:28Z d3687-mb $
+
+***************************/
+version 11.2
+
+class mergersim_merger {
+	string prefix 
+	string market
+	string price 
+	string quantity 
+	string revenue
+
+	string costs	
+	string firm
+	string conduct
+	
+	string dampen = "1"
+	string maxit = "1000"
+	string method = "newton"
+	
+	string buyer 
+	string seller 
+	string buyereff = "0"
+	string sellereff = "0"
+	string efficiencies
+	string newfirm
+	string newconduct
+	string market_last
+	
+	string priceweights
+	string predict
+	string keepvars
+	string dropvars
+
+	string name
+	double programstep
+	string newvars
+	
+	class mergersim_variable_labels label
+	class mergersim_demand demand
+	string mata
+	string mata_D
+	
+	double sim = 2
+}
+
+program .new
+	args name demandtype
+	.name = "`name'" // Required parameter
+	.prefix = "`.name'_"
+	.mata = "mergersim_`.name'"
+	.mata_D = "`.mata'_D"
+	mata: `.mata' = Merger()
+	mata: `.mata'.init()
+	
+	.demand = .mergersim_logit_demand.new `.mata_D' `.prefix'
+	.label = .mergersim_variable_labels.new
+	
+	capture drop `.prefix'*
+end
+
+program .destructor
+	capture drop `.label'
+	capture drop `.demand'
+end
+
+******************************  INIT  ************************************************
+
+program .init , rclass
+	syntax , ///
+	[ Firm(varname numeric)  ///
+	Price(name) Quantity(name) Revenue(name) Costs(varname numeric) /// Two of three required
+	* /// Demand specific options
+	]
+	
+	.programstep = 1
+
+	local stringopts quantity price revenue firm costs
+	foreach opt in `stringopts' {
+		if "``opt''" != "" {
+			.`opt' = "``opt''"
+			local `opt'  "`opt'(``opt'')"
+		}
+	}
+
+	if "`.costs'" != "" { // TODO: move to equilibrium?
+		.predict = "predict"
+		local stringopts quantity price revenue
+		foreach opt in `stringopts' {
+			if "`.`opt''" != "" {
+				quietly generate double `.`opt'' = .
+			}
+		}
+	}
+	else { 
+		.costs = "`.prefix'costs"
+	}
+	// Pass variables to function to check that they exist and are numeric.
+	.init_variables , `price' `quantity' `revenue'
+	local initproblems "`r(output)'"
+	
+	/*
+	The syntax for logit init is:
+	
+	syntax [namelist],  [ marketsize(varname numeric) CESdemand UNITdemand /// 
+	nests(varlist numeric max=2) alpha(numlist max=1 <0 ) sigmas(numlist max=2 >=0 <=1) delta(varname numeric) ]
+	
+	*/
+
+	.demand.prefix = .prefix
+	.demand.price = .price
+	.demand.quantity = .quantity
+	.demand.revenue = .revenue
+	.demand.market = .market
+	.demand.init , `options'  // Pass on demand specific options 
+	
+	.newvars = "`r(newvars)'"
+	return add
+	if 	"`.newvars'" != "" {
+		.set_labels
+	}
+//	order `.price' `.quantity' `.revenue' `newvars' , last
+	
+	.init_output
+	.dropvars = "`r(dropvars)'"
+end	
+
+******************************  MARKET  **********************************************
+
+program .marketcalc , rclass
+	syntax [if] [in] [, ///
+	Firm(varname numeric) conduct(numlist max=1 >=0 <=1) priceweights(varname numeric) ///
+	lastperiod predict KEEPvars quietly ///
+	]
+	marksample touse
+	
+	if  `.programstep' > 1 { // Regenerate utility vars dropped in mergersim_simulate
+	} 
+	.set_firm `firm'
+	local opts priceweights keepvars predict conduct
+	foreach opt in `opts' {
+		if "``opt''" != "" {
+			.`opt' = "``opt''"
+		}
+	}
+	if "`.conduct'" == "" { // Could be set in syntax command
+		.conduct = "0"
+	}
+
+	.delete_vars costs lerner
+	
+	if("`.predict'" != "" ) {
+		local predictopt ", predict"
+	}
+	if `.programstep' != 3 { // Could be set in syntax command
+		.demand.getdemand if `touse' `predictopt'
+	}
+	.newvars = "`.prefix'costs `r(newvars)'"
+	.programstep = 3
+	quietly generate double `.prefix'costs = .
+	mata { 
+		`.mata'.m[1].conduct = `.conduct'
+		`.mata'.m[1].firm = "`.firm'"
+		`.mata'.m[1].costs = "`.prefix'costs"
+		`.mata'.m[1].price = "`.price'"
+		`.mata'.m[1].initprice = "`.price'"
+		`.mata'.m[1].quantity = "`.quantity'" 
+		`.mata'.costestimate(`.mata_D', "`touse'", 1) 
+	}
+			 
+	quietly generate double `.prefix'lerner = ( `.price' - `.prefix'costs)/ `.price'  
+	.set_labels
+	if "`quietly'" == "" { // Do not calculate and display output when invoked from simulate
+		.marketcalc_output `touse'
+	}
+	return add
+	if "`.keepvars'" == "" {
+		.delete_vars  `.dropvars' lerner share
+	}	
+end	
+
+****************************  SIMULATE  **********************************************
+
+program .simulate , rclass
+	syntax [if] [in] [, ///
+	BUYer(numlist max=1 >=0) SELLer(numlist max=1 >=0) NEWFirm(varname numeric) Firm(varname numeric ) ///
+	EFFiciencies(varname numeric) NEWCosts(varname numeric) buyereff(numlist max=1 >=0 <=1) sellereff(numlist max=1 >=0 <=1) /// 
+	conduct(numlist max=1 >=0 <=1) newconduct(numlist max=1 >=0 <=1) lastperiod predict error ///
+	method(string) priceweights(varname numeric) maxit(numlist max=1 >=0) dampen(numlist max=1 >=0 <=1) ///
+	KEEPvars add detail newdelta(varname numeric) /// 
+	]
+	marksample touse
+	return clear
+	local opts newfirm efficiencies buyereff sellereff buyer seller conduct ///
+	newconduct newcosts dampen maxit method priceweights keepvars
+	foreach opt in `opts' {
+		.`opt' = "``opt''"
+	}
+	.set_firm `firm'
+	if "`add'" != "" {
+		.sim = `.sim' + 1
+	}
+	.delete_vars price`.sim' price_ch quantity`.sim' revenue`.sim'
+	
+	if "`lastperiod'" != "" {
+		local touse "`.market' == `.market_last'"
+		di "Last period used for simulation" 
+	}
+	.solver_options
+
+	*******************************************************************	
+	// mergersim_market has to be run first. Call function if not user invoked.
+	
+	if "`predict'" == ""  { 
+		 quietly .marketcalc if `touse' , quietly
+	}
+	.programstep = 4 // mergersim_simulate has been executed
+	
+	if "`.conduct'" == "" {
+		.conduct = "0"
+	}
+	if "`.newconduct'" == "" { // New conduct set in simulate
+		.newconduct = "`.conduct'"
+	}
+	if "`newdelta'" != "" {
+		quietly replace `.prefix'delta = `newdelta'
+	}
+
+	// Generate firm 2 if it does not exist, using buyer and seller or newfirm variable.
+	// If efficiencies variable specified, the simulation is based on these.
+	.generate_newfirm `.sim'
+	
+	// Generate post-merger values, and result variables
+	quietly generate double `.prefix'price`.sim' = .
+	quietly generate double `.prefix'quantity`.sim' = .
+	.create_newcosts
+	
+	*******************************************************************	
+	mata { 
+		`.mata'.m[`.sim'].conduct = `.newconduct'
+		`.mata'.m[`.sim'].firm = "`.prefix'firm`.sim'"
+		`.mata'.m[`.sim'].costs = "`.prefix'costs`.sim'"	
+		`.mata'.m[`.sim'].price = "`.prefix'price`.sim'"
+		`.mata'.m[`.sim'].initprice = "`.price'"
+		`.mata'.m[`.sim'].quantity = "`.prefix'quantity`.sim'" 
+
+		`.mata'.bootresults = "`.prefix'bootstrap"
+		`.mata'.equilibrium(`.mata_D', "`touse'", `.sim')
+	}
+	*******************************************************************	
+	.simulate_output `touse'
+	return add
+	
+	// Create post merger variables
+	//.demand.post_equilibrium  , sim(`.sim')
+	.set_labels
+	
+	if "`detail'" != "" {
+		.results if `touse', detail
+		return add
+	}
+	if "`.keepvars'" == "" {
+		.delete_vars  `.dropvars'
+		.demand.cleanup
+	}
+	.delete_vars
+	return local N ""
+end
+
+***************************  EQUILIBRIUM  ********************************************
+
+program .equilibrium , rclass
+	syntax [if] [in] [, ///
+	Firm(varname numeric )  conduct(numlist max=1 >=0 <=1) predict lastperiod error ///
+	method(string) priceweights(varname numeric) maxit(numlist max=1 >=0) dampen(numlist max=1 >=0 <=1)  /// 
+	]
+	marksample touse
+	/*
+	if `.programstep' > 3 {
+		.programstep = 2 // mergersim_equilibrium has been executed. Can affect variables used in simulate
+	}
+	*/
+	local opts priceweights predict conduct dampen maxit method
+	foreach opt in `opts' {
+		.`opt' = "``opt''"
+	}
+	.solver_options
+	.set_firm `firm'
+	
+	if "`lastperiod'" != "" {
+		local touse "`.market' == `.market_last'"
+		di "Last period used for simulation" 
+	}
+	if "`.conduct'" == "" {
+		.conduct = "0"
+	}
+	if "`.predict'" != "" {
+		if "`e(depvar)'" == "`.costs'" {
+			.costs = "`.prefix'costs1" 
+			// merger costs was explicitly called implying user cost estimation
+			// Test that M_costs dependent variable
+			display "Cost estimation, predict xbu used."
+			quietly predict `.costs' if `touse', xbu
+		} 
+		else {
+			di as error "ERROR: The predict option requires a regression with `.costs' as dependent variable."
+			error 111
+		}
+	}
+	if "`.costs'" == "" {
+		.costs = "`.prefix'costs" // Has to exist. TODO: Check this.
+	}
+	quietly sum `.prefix'costs
+	if _rc {
+		di as error "ERROR: costs() have to be specified in init or the cost variable `.prefix'costs has to exist."
+		error 111
+	}
+
+	.price = "`.prefix'price1"  // Keep old price if not generated
+	.quantity = "`.prefix'quantity1"  // New quantity
+	capture drop `.price'  
+	quietly generate double `.price' = `.costs' // Start with costs as 
+	quietly generate double `.quantity' = .
+
+	*******************************************************************	
+	mata { 
+		`.mata'.m[1].conduct = `.conduct'
+		`.mata'.m[1].firm = "`.firm'"
+		`.mata'.m[1].costs = "`.costs'"	
+		`.mata'.m[1].price = "`.price'"
+		`.mata'.m[1].initprice = "`.costs'"
+		`.mata'.m[1].quantity = "`.quantity'" 
+		`.mata'.bootresults = "`.prefix'bootstrap"
+		`.mata'.equilibrium(`.mata_D', "`touse'", 1)
+	}
+	*******************************************************************	
+	.equilibrium_output
+	return add
+	
+	//.demand.market_output if `touse' `comma' `priceweightopt' `keepvars'
+
+	return add
+	.set_labels
+end
+
+*****************************  RESULTS  **********************************************
+
+program .results  , rclass
+	syntax [if] [in] [,  priceweights(varname numeric) show(varlist numeric ) rowvars(varlist numeric) ///
+	detail stat(string) KEEPvars VALUEshares] 
+	marksample touse
+	return add
+	
+	if `.programstep' < 4 & "`show'" == "" {
+		di as error "mergersim simulate has to be run before mergersim results"
+		error 119
+	}
+	local opts priceweights keepvars  
+	foreach opt in `opts' {
+		if "``opt''" != "" {
+			.`opt' = "``opt''"
+		}
+	}
+
+	if "`show'" == "" & "`detail'" == "" {
+		display _newline(1) "{hi:Prices}"
+		if "`.price'" != "`.prefix'price" {
+			generate `.prefix'price = `.price'
+		}
+		capture quietly generate double `.prefix'price_ch = ( `.prefix'price`.sim' - `.price') / `.price'
+		local show `.prefix'price `.prefix'price`.sim' `.prefix'price_ch
+		label var `.prefix'price "Pre-merger"
+		label var `.prefix'price`.sim' "Post-merger"
+		label var `.prefix'price_ch "Relative change"
+	}
+	if "`rowvars'" == "" {
+		local rowvars `.firm'
+	}
+
+	if "`detail'" != "" { 
+		.market_shares `touse' `valueshares'
+		scalar c4 = r(c4)
+		scalar c8 = r(c8)
+		scalar c42 = r(c42)
+		scalar c82 = r(c82)
+		return add
+		local stat "sum"
+		local show `.prefix'marketsh `.prefix'marketsh`.sim' `.prefix'marketsh_ch	
+		quietly generate `.prefix'ps = ((`.prefix'price`.sim'  - `.prefix'costs`.sim')* `.prefix'quantity`.sim' ///
+		- (`.price'  - `.prefix'costs)* `.quantity' )
+		preserve
+			collapse (first) `.prefix'hhs if `touse' , by(`.market' `.firm' ) 
+			collapse (sum) `.prefix'hhs  , by(`.market') 
+			collapse  `.prefix'hhs
+			sum `.prefix'hhs , meanonly
+			scalar hhs = r(mean)*10000
+			return scalar hhs = hhs
+		restore
+		preserve
+			collapse (first) `.prefix'hhs`.sim' (sum) `.prefix'ps if `touse' , by(`.market' `.prefix'firm`.sim' ) 
+			collapse (sum) `.prefix'hhs`.sim' `.prefix'ps  , by(`.market') 
+			collapse  `.prefix'hhs`.sim' `.prefix'ps 
+			sum `.prefix'hhs`.sim' , meanonly
+			scalar hhs2 = r(mean)*10000
+			return scalar hhs2 = hhs2
+			sum `.prefix'ps , meanonly
+			scalar ps = r(mean)
+			return scalar ps = ps
+		restore
+		mata:`.mata'.consumerSurplus(`.mata_D', "`touse'", 2)
+		scalar cs = r(cs)
+		return scalar cs = cs
+	}	
+
+	local priceweights "`.priceweights'"
+	if "`stat'" != "" {
+		local stat "(`stat')"
+	}
+	foreach showvar in `show' {
+		local lbl`showvar' : variable label `showvar'
+	}
+
+	foreach tablevar in `rowvars' {
+		if "`.priceweights'" == "" {
+			local weighted ""
+			display as text "Unweighted averages by `tablevar'"
+		}
+		else {
+			capture confirm int variable `.priceweights' 
+			if _rc {
+				di as error "ERROR: The weighting variable `.priceweights' is not of integer type."
+				error _rc
+			}
+			local weighted "[fw=`.priceweights']"
+			display as text "Averages by `tablevar' using `.priceweights' as frequency weights"
+		}
+		preserve
+		
+		if "`weighted'" != "" | "`stat'" != "" {
+			// Weighted average or sum for each market, unweighted average between markets.
+			collapse `stat' `show' if `touse' `weighted', by(`.market' `tablevar') 
+			collapse `show' , by( `tablevar') 
+		}
+		else {
+			collapse `show' if `touse' , by( `tablevar') 
+		}
+		foreach showvar in `show' {
+			label var `showvar' "`lbl`showvar''"
+		}
+		tabdisp `tablevar', c(`show') cellwidth(18) stubwidth(20) format(%9.3f) 
+		mkmat `show'
+		foreach result in `show' {
+			return matrix `result' = `result'
+		}	
+		restore	
+	}
+	if "`detail'" != "" { 
+		local a 1
+		local b 25
+		local c 40
+		local d 45
+		local width 50
+		
+		display
+		di "{hline `width'}"
+		di _column(`b') as text %10s "Pre-merger"  _column(`c') "Post-merger"  
+		di "{hline `width'}"
+		di _column(`a') as text "HHS:" _continue
+		di _column(`b') as result %5.0f hhs _column(`c') as result %5.0f hhs2
+		di _column(`a') as text "C4:" _continue
+		di _column(`b') as result %4.2f c4 _column(`c') as result %4.2f c42
+		di _column(`a') as text "C8:" _continue
+		di _column(`b') as result %4.2f c8 _column(`c') as result %4.2f c82
+
+		di "{hline `width'}"
+		di "{hline `c'}"
+		display _column(`b') as text %15s "Change"
+		di "{hline `c'}"
+		display as text "Consumer surplus: " _column(`b') as result %15.0fc cs
+		display as text "Producer surplus: " _column(`b')as result %15.0fc ps
+		di "{hline `c'}"
+
+	}
+	capture drop `.prefix'price
+	capture drop `.prefix'hhs
+	capture drop `.prefix'ps
+	capture drop `.prefix'hhs`.sim'
+//	capture drop `.prefix'price_ch
+	if "`.keepvars'" == "" {
+		capture drop `.prefix'marketsh
+		capture drop `.prefix'marketsh`.sim'
+		capture drop `.prefix'marketsh_ch
+	}
+end
+
+****************************  MRE  ***************************************************
+
+program .mre , rclass byable(recall) 
+	syntax [if] [in] [, buyer(numlist max=1 >=0) seller(numlist max=1 >=0) newfirm(varname numeric) lastperiod prediction KEEPvars]
+	marksample touse
+
+	// mergersim_market has to be run first. Call function if not user invoked.
+	if `.programstep' < 3  | `.programstep' == 4 { // simulate drops M_delta 
+		 .marketcalc if `touse' , quietly
+	}
+	
+	local opts newfirm keepvars buyer seller prediction
+	foreach opt in `opts' {
+		if "``opt''" != "" {
+			.`opt' = "``opt''"
+		}
+	}
+	if "`lastperiod'" != "" {
+		local touse "`.market' == `.market_last'"
+		di "Last period used for simulation" 
+	}
+	capture drop `.prefix'costs2 
+	capture drop `.prefix'mre 
+
+	.generate_newfirm 2
+	quietly generate double `.prefix'costs2 = .
+	mata { 
+		`.mata'.m[2].conduct = `.conduct'
+		`.mata'.m[2].firm = "`.prefix'firm2"
+		`.mata'.m[2].costs = "`.prefix'costs2"
+		`.mata'.m[2].price = `.mata'.m[1].price
+		`.mata'.m[2].initprice = `.mata'.m[1].price
+		`.mata'.m[2].quantity = `.mata'.m[1].quantity 
+		`.mata'.costestimate(`.mata_D', "`touse'", 2) 
+	}
+
+	quietly {
+		generate `.prefix'mre = (`.prefix'costs - `.prefix'costs2)/ `.prefix'costs
+		format `.prefix'mre `.prefix'costs `.prefix'costs2 %9.3f
+		preserve
+		tempvar totQ share
+		egen `totQ' = total(`.quantity'), by(`.market')
+		gen `share' = `.quantity' / `totQ'
+		keep if `.prefix'firm2 == `.buyer' & `touse'
+		generate `.prefix'wc = `.prefix'costs * `share'
+		generate `.prefix'wc2 = `.prefix'costs2 * `share'
+		egen `.prefix'wct = total(`.prefix'wc) , by(`.market')
+		egen `.prefix'wc2t = total(`.prefix'wc2) , by(`.market')
+	//	egen `.prefix'wfa = mean(`.prefix'mre) , by(`.market')
+		generate `.prefix'mre_weight = (`.prefix'wct - `.prefix'wc2t)/`.prefix'wct 
+	}
+	sum `.prefix'mre_weight , meanonly
+	scalar mre_weight = r(mean)
+	return scalar mre_weight = r(mean)
+	
+	local width 54
+	di ""
+	di "{hline `width'}"
+	di "Minimum Required Efficiencies for merging firms"
+	tabstat `.prefix'costs  `.prefix'costs2  `.prefix'mre if `touse', stat(mean sd min max) col(stat) long save format // (%9,3f) 
+	matrix mre = r(StatTotal)'
+	return matrix mre = mre
+	di "Weighted average MRE: " as result %-9.3f mre_weight _continue
+	quietly count if `touse'
+	di as text "Observations: " as result r(N)
+	
+	di "{hline `width'}"
+	di as text "Variable generated: " as result "`.prefix'mre"
+	di "{hline `width'}"
+	// store result in rclass matrix
+	restore
+	capture drop `.prefix'firm2
+	if "`.keepvars'" == "" {
+		capture drop `.prefix'costs2
+//		capture drop  `.prefix'mre
+	}
+	.set_labels
+end
+
+***************************  DEMAND  ************************************************
+
+program .demandcalc , rclass
+	syntax [if] [in] [, ///
+	price(varname numeric) ssnip(numlist max=1 >=0 <=1)  ///
+	lastperiod  ///
+	]
+	marksample touse
+	
+	if  `.programstep' != 3 { // Regenerate utility vars dropped in mergersim_simulate
+		quietly .marketcalc
+	}
+	capture drop `.prefix'quantity3
+	capture drop `.prefix'price3
+	capture drop `.prefix'profit*
+	
+	if "`price'" == "" {
+		local price `.price'
+	}
+	if "`ssnip'" != "" {
+		quietly gen `.prefix'price3 = ( 1 + `ssnip') * `price' if `touse'
+		local price `.prefix'price3 
+	}
+	quietly generate `.prefix'share3 = .
+	mata { 
+		`.mata'.m[3].param.method = 2
+		`.mata'.m[3].conduct = 0
+		`.mata'.m[3].firm = "firm"
+		`.mata'.m[3].costs = "`.costs'"
+		`.mata'.m[3].quantity = "`.prefix'quantity3"
+		
+		`.mata'.m[3].share = "`.prefix'share3" 
+		`.mata'.m[3].price = "`price'"
+		`.mata'.m[3].initprice = "`price'"
+
+		`.mata'.demand(`.mata_D', "`touse'", 3)
+	}
+	
+	if "`ssnip'" != "" { 
+		quietly gen `.prefix'profit = `.quantity' * (`.price' - `.costs') if `touse'
+		quietly gen `.prefix'profit3 = `.prefix'quantity3 * (`.prefix'price3 - `.costs') if `touse'
+	//	quietly gen `.prefix'profit_ch = (`.prefix'profit3 - `.prefix'profit)	/ `.prefix'profit if `touse' 
+		format `.prefix'profit `.prefix'profit3 %9.0fc
+		
+		di ""
+		di as result "Profits prior and after price increase"
+		quietly {
+			preserve
+			collapse (sum) `.prefix'profit `.prefix'profit3  if `touse' , by(`.firm')
+			
+			local profitvars `.prefix'profit `.prefix'profit3
+			// Generate observation with totals for tabdisp
+			tempvar s
+			local obs = c(N)
+			set obs `=`obs'+1'
+			foreach var in `profitvars' {
+				egen `s' = total(`var')
+				replace `var' = `s' if `.firm' == .
+				drop `s'
+			}
+		}
+		tabdisp `.firm', c(`profitvars' ) cellwidth(18) stubwidth(20) format(%9.0fc) totals
+		
+		collapse (sum) `.prefix'profit `.prefix'profit3 
+		mkmat `.prefix'profit `.prefix'profit3 
+		restore
+		return matrix profit = `.prefix'profit 
+		return matrix profit3 = `.prefix'profit3 
+	}
+	
+	.set_labels
+	
+	*************************************************************
+	local width 61
+	di "{hline `width'}"
+	
+	di as text "Variables generated: " as result "`.prefix'quantity3 `profitvars'"
+	di "{hline `width'}"
+	capture drop `.prefix'share3
+end	
+
+**************************************************************************************
+
+program .market_shares , rclass
+args touse valueshares
+		if "`valueshares'" != "" { 
+			di _newline(1) "{hi:Market shares by value}"
+			if "`.revenue'" == "" {
+				tempvar quantityvar
+				quietly generate `quantityvar' = `.price'*`.quantity'
+			}
+			else {
+				local quantityvar "`.revenue'"
+			}
+			tempvar quantityvar2
+			quietly generate `quantityvar2' = `.prefix'price`.sim' * `.prefix'quantity`.sim'
+		}
+		else {
+			di _newline(1) "{hi:Market shares by quantity}"
+			if "`.quantity'" == "" { 
+				tempvar quantityvar
+				quietly generate `quantityvar' = `.revenue' / `.price'
+			}
+			else {
+				local quantityvar `.quantity'
+			}
+			local quantityvar2 `.prefix'quantity`.sim'
+		}
+		capture drop `.prefix'marketsh
+		capture drop `.prefix'marketsh`.sim'
+		capture drop `.prefix'marketsh_ch
+		tempvar totQ firmQ
+		tempvar totQ2 firmQ2
+		quietly {		
+			egen `totQ' = sum(`quantityvar') if `touse' & `quantityvar2' != . , by(`.market')
+			egen `totQ2' = sum(`quantityvar2') if `touse', by(`.market')	
+			generate double `.prefix'marketsh = `quantityvar' /`totQ'  if `touse' & `quantityvar2' != .
+			generate double `.prefix'marketsh`.sim' = `quantityvar2' /`totQ2'  if `touse'
+			generate double `.prefix'marketsh_ch = `.prefix'marketsh`.sim' - `.prefix'marketsh if `touse' & `quantityvar2' != .
+
+			egen `firmQ' = sum(`quantityvar') if `touse' & `quantityvar2' != . , by(`.market' `.firm')
+			egen `firmQ2' = sum(`quantityvar2') if `touse' , by(`.market' `.prefix'firm`.sim')
+			generate double `.prefix'hhs = (`firmQ' /`totQ')^2  if `touse' & `quantityvar2' != .
+			generate double `.prefix'hhs`.sim' = (`firmQ2' /`totQ2')^2  if `touse' 
+		}
+		label var `.prefix'marketsh "Pre-merger"
+		label var `.prefix'marketsh`.sim' "Post-merger"
+		label var `.prefix'marketsh_ch "Difference"	
+		.c4c8 `touse' `.prefix'marketsh `.firm'
+		return scalar c4 = r(c4)
+		return scalar c8 = r(c8) 
+		.c4c8 `touse' `.prefix'marketsh`.sim' `.prefix'firm`.sim'
+		return scalar c42 = r(c4)
+		return scalar c82 = r(c8) // xxx
+end	
+
+program .c4c8 , rclass	
+	args touse marketsh firm
+		preserve
+			collapse (sum) firmsh = `marketsh' if `touse', by(`.market' `firm')
+			gsort `.market' -firmsh
+			quietly gen biggest4 = 0
+			quietly gen biggest8 = 0
+			quietly by `.market': replace biggest4 = firmsh if _n <= 4
+			quietly by `.market': replace biggest8 = firmsh if _n <= 8
+			collapse (sum) biggest4 biggest8, by(`.market') 
+			collapse biggest4 biggest8
+			sum biggest4 , meanonly
+			return scalar c4 = r(mean)*100
+			sum biggest8 , meanonly
+			return scalar c8 = r(mean)*100
+		restore
+end	
+
+************************************************************************************** 
+**************************************************************************************
+
+program .init_variables , rclass	
+	syntax , [ ///
+ 	price(varname numeric) quantity(varname numeric) revenue(varname numeric) /// Two of three required
+	]
+	quietly {
+	capture tsset
+	if _rc == 459 { // xtset not set
+		return local output = "WARNING: Assuming a single cross-section. For panel data, use xtset or tsset."
+		generate `.prefix'market = 1
+		.market = "`.prefix'market"
+	}
+	else if _rc > 0 { // Other error
+		noisily di as error "ERROR: Could not set panel because xtset crashed. _rc = `=_rc'"
+		error _rc
+	}
+	else {
+		.market = r(timevar)
+		.market_last = r(tmaxs)
+	}	
+
+	mata: `.mata'.marketvar = "`.market'"
+		
+	if "`.quantity'" != "" & "`.price'" != "" { 
+		if "`.revenue'" != "" {
+			display "Error: Not all three of price, quantity and revenue can be specified in merger init.
+			error 184
+		}
+	}
+	else if "`.quantity'" != "" & "`.revenue'" != "" {
+		 .price = "`.prefix'price"
+		 generate double `.price'  = `.revenue' / `.quantity'
+		.newvars = "`.price'" 
+	}		
+	else if "`.price'" != "" & "`.revenue'" != "" {
+		 .quantity = "`.prefix'quantity"
+		 generate double `.quantity' = `.revenue' / `.price'
+		.newvars = "`.quantity'" 
+	}	
+	else {
+		display as error "Error: Two of price, quantity and revenue bave to be specified in merger init."
+		error 184
+	}
+
+	} // quietly
+end
+
+program .solver_options
+	mata: `.mata'.m[2].param.init() // Reset parameters	
+
+	local numopts dampen maxit
+	foreach opt in `numopts' {
+		if  "`.`opt''" != "" {
+			mata: `.mata'.m[2].param.`opt' = `.`opt''	
+		} 
+	}
+	if  "`.method'" != ""  {
+		if  "`.method'" == "fixedpoint" | "`.method'" == "f" {
+			mata: `.mata'.m[2].param.method = 1
+		}
+		else if  "`.method'" == "newton" | "`.method'" == "n" {
+			mata: `.mata'.m[2].param.method = 2	
+		}
+		else if  "`.method'" == "combined" | "`.method'" == "c" {
+			mata: `.mata'.m[2].param.method = 3	
+		}
+		else if  "`.method'" == "new" {
+			mata: `.mata'.m[2].param.method = 4	
+		}
+	}
+	else {
+		mata: `.mata'.m[2].param.method = 2	
+	}
+end	
+
+program .set_firm
+	args firm
+	if "`firm'" != "" {
+		if "`.firm'" != "" & "`.firm'" != "`firm'" {
+			di as error "WARNING: Firm is being redefined from `.firm' to `firm'"
+		}
+		.firm = "`firm'" 
+	}
+	else if "`.firm'" == "" {
+			di as error "Firm variable has to be specified with firm() option."
+			error 198
+	}
+end	
+
+program .generate_newfirm
+	if "`.newfirm'" == "" {
+		if ("`.buyer'" == "" | "`.seller'" == "" ) & "`.efficiencies'" == "" {
+			di "{error:Both buyer() and seller() have to be specified unless post merger ownership is explicitly set.}"
+			di "Seller: `.seller'"
+			di "Buyer: `.buyer'"
+			display "Alternatively, either:"
+			di "  1) newfirm(varname) with new ownership can be specified."
+			di "  2) efficiencies(varname) with efficiencies can be specified."
+			error 184
+		}
+		quietly generate `.prefix'firm`.sim' = `.firm'
+		quietly replace `.prefix'firm`.sim' =  `.buyer' if `.firm' == `.seller'
+	} 
+	else {
+		if "`.buyer'" != "" | "`.seller'" != "" {
+			di as error "Warning: buyer and seller options are redundant and ignored if newfirm option is specified."
+		}
+		quietly generate `.prefix'firm`.sim' = `.newfirm'
+		local ownershipstruct "Ownership structure specified in `.prefix'firm`.sim'"
+	}
+end
+
+program .create_newcosts
+	quietly generate double `.prefix'costs`.sim' = `.costs'
+	if "`.newfirm'" == "" {
+		if "`.buyer'" == "" | "`.seller'" == "" {
+			di as error "ERROR: buyer() and seller() must be specified unless newfirm() is used."
+			error 184
+		}
+		if "`.buyereff'" != "" {
+			quietly replace `.prefix'costs`.sim' = `.costs' *(1 - `.buyereff') if `.firm'  == `.buyer' 
+		}
+		if "`.sellereff'" != "" {
+			quietly replace `.prefix'costs`.sim' = `.costs' * (1 - `.sellereff') if `.firm' == `.seller'
+		}
+	}
+	else {
+		if "`.buyereff'" != "" | "`.sellereff'" != "" {
+			di as error "ERROR: You can't specify buyereff() or sellereff() when newfirm() option is used."
+			error 184
+		}
+	}
+	if "`.efficiencies'" != "" {
+		if "`newcosts'" != "" { 
+			di as error "ERROR: You can't specify both efficiencies() and newcosts() at the same time."
+			error 184
+		}
+		quietly replace `.prefix'costs`.sim'= `.costs' * (1 - `.efficiencies')
+	} 
+	else if "`.newcosts'" != "" {
+		quietly replace `.prefix'costs`.sim' = `.newcosts' // Copying is not actually necessary
+	}	
+end	
+
+**************************************************************************************
+
+program .delete_vars
+	syntax [namelist]
+	local dropalways costs2 firm2 market // mre
+	local dropmost `dropalways' bootstrap lerner share share2 // price_ch
+	if "`namelist'" == "" {
+		if "`.keepvars'" == "" {
+			local droplist `dropmost' 
+		}
+		else  {
+			local droplist `dropalways'
+		}
+	}
+	else  {
+		local droplist `namelist'
+	}
+	
+	foreach var in `droplist' {
+		capture drop `.prefix'`var'
+	}
+end
+
+program .set_labels
+	foreach lname of varlist `.prefix'* {
+		local vname = subinstr("`lname'","`.prefix'","",1) 
+		label var `lname' "`.label.`vname''"
+	}
+end
+
+**************************************************************************************
+*****************************  OUTPUT METHODS ****************************************
+**************************************************************************************
+
+program .init_output	
+	local width 80
+	di "{hline `width'}"
+	display "{hi:MERGERSIM: Merger Simulation Program}"
+	display "Version 1.0, " _continue
+	
+	// Get the revision number from Subversion 
+	// The global macro Rev removes $ symbols necessary for Subversion revision replacement
+	global Rev ""
+	display "Revision$Rev: 218 $Rev
+	di "{hline `width'}"
+
+	.demand.init_output // Logit specific output
+		
+	di as text "Variables generated: " as result "`.newvars'" 
+	di "{hline `width'}"
+	if "`initproblems'" != "" {
+		di as error "`outputproblems'"
+	}
+	.newvars = ""
+end	
+
+program .marketcalc_output , rclass
+	args touse
+	local width 81
+	di "{hline `width'}"
+	if `.conduct' == 0 {
+		di as text "Supply: " as result "Bertrand competition"
+	}
+	else {
+		di as text "Supply: " as result "Partial collusion, conduct = `.conduct'"
+	}
+	if "`.priceweights'" != "" { 
+		local comma ,
+		local priceweightopt "priceweights(`priceweights')"
+	}
+	if "`.keepvars'" != "" { 
+		local comma ,
+	}
+	.demand.market_output if `touse' `comma' `priceweightopt' `keepvars'
+	return add
+
+	di	
+	di as result "Pre-merger Market Conditions "
+	
+	local show "`.price' `.prefix'costs `.prefix'lerner"
+	if "`priceweights'" != "" {
+		local options " priceweights(`priceweights')"
+	}	
+	.results if `touse', show(`show') `options'
+	return add
+	
+	di as text "Variables generated: " as result "`.newvars' "
+	di "{hline `width'}"
+	.newvars = ""
+end	
+
+program .simulate_output , rclass
+args touse	
+	local a 1
+	local b 25
+	local c 35
+	local d 45
+	local width 81
+
+	scalar convergence = r(convergence) 
+	local convergenceproblem `r(convergenceproblem)'
+	if !r(convergence) {
+		di as error "Simulation did not converge."
+		di as result "Error: `convergenceproblem'"
+		if "`error'" != "" {
+			 di as error "Exiting"
+			 error 499
+		}
+	}
+	
+	display
+	di "{hline `width'}"
+	display "Merger Simulation"
+	display
+	di _column(`d') as text "Simulation method: " as result "`r(method)'"
+	if "`.newfirm'" == "" { 
+		di 						_column(`b') as text "Buyer" _column(`c') "Seller" _continue
+	}
+	else { 
+		di 						_column(`b') as text "Variable name" _continue
+	}
+	di _column(`d') as text "Periods/markets: " as result "`r(markets)'"
+	if "`.newfirm'" == "" { 
+		di _column(`a') as text "Firm" 	_continue
+		di _column(`b') as result "`.buyer'" _column(`c') "`.seller'" _continue 
+	}
+	else { 
+		di _column(`a') as text "Ownership from:" _column(`b') as result "`.newfirm'" _continue
+	}	
+	if `r(markets)' > 1 {
+		di 						_column(`d') as text "Average number of iterations: " as result %-6.2f  r(iterations) 
+		di 															_column(`d') as text "Max number of iterations: " as result %-6.0f   r(maxiterations)
+	}
+	else {
+		di 						_column(`d') as text "Number of iterations: " as result r(iterations)
+	} 
+	if "`.efficiencies'" == "" { 
+		di _column(`a') as text "Marginal cost savings" _continue
+		di _column(`b') as result "`.buyereff'" _column(`c') "`.sellereff'"  _continue
+	}
+	else { 
+		di _column(`a') as text "Efficiencies from:" _column(`b') "`.efficiencies'"  _continue
+	}
+	di _column(`d') as text "Max price change in last it: " as result %-9.2g r(maxpricediff)
+	if `.conduct' != 0 { 
+		di 
+		di _column(`b') as text "Pre"  _column(`c') "Post"  
+		di _column(`a') as text "Conduct:" _continue
+		di _column(`b') as result `.conduct' _column(`c') `.newconduct' 
+	}
+	di "{hline `width'}"
+			
+	.results if `touse'
+	return add 
+	
+	di as text "Variables generated: " as result "`.prefix'price2 `.prefix'quantity2 `.prefix'price_ch" _continue
+	if "`.keepvars'" == "" {
+		di " (Other M_ variables dropped)"
+	}
+	else {
+		di ""
+	}
+	di "{hline `width'}"
+end
+
+program .equilibrium_output , rclass
+args touse
+	
+	local a 1
+	local b 25
+	local c 35
+	local d 45
+	local width 81
+	
+	scalar convergence = r(convergence) 
+	local convergenceproblem `r(convergenceproblem)'
+	if !convergence {
+		di as error "Simulation did not converge."
+		di as result "Error: `convergenceproblem'"
+		if "`error'" != "" {
+			 di as error "Exiting"
+			 error 499
+		}
+	}
+
+	display
+	di "{hline `width'}"
+	display "Equilibrium calculation"
+	display
+	di _column(`d') "Method: `r(method)'"
+	di _column(`d') "Periods/markets: `r(markets)'"
+	
+	if `r(markets)' > 1 {
+		di 						_column(`d') "Average number of iterations: " as result %-6.2f  r(iterations) 
+		di 															_column(`d') "Max number of iterations: " as result %-6.0f   r(maxiterations)
+	}
+	else {
+		di 						_column(`d') "Number of iterations: " as result r(iterations)
+	} 
+
+	di _column(`d') "Max price change in last it: " as result %-9.2g r(maxpricediff)
+	if `.conduct' != 0 { 
+		di 
+		di _column(`b') "Pre"  _column(`c') "Post"  
+		di _column(`a') "Conduct:" _continue
+		di _column(`b') `.conduct' _column(`c') `.newconduct' 
+	}
+	di "{hline `width'}"
+				
+	di as text "Variables generated: " as result "`.prefix'price `.prefix'quantity"
+	di "{hline `width'}"
+	return add
+end
+

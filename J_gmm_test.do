@@ -71,7 +71,7 @@ reg `delta' `endog' `exog'
 * GMM result:
 gmm J_resid_nested, nequations(1) parameters(d:`price') regressors(`endog' `exog' ) ///
 instruments(`instr' `exog' , noconstant) twostep ///
-winitial(unadjusted) wmatrix(robust) from(`price' -1) 
+winitial(unadjusted) wmatrix(robust) from(`price' -1) vce(robust)
 
 tempvar delta
 matrix est = e(b)

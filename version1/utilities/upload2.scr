@@ -1,0 +1,3 @@
+cd public_html/stata/mergersim
+del *.*
+mput *.* -r

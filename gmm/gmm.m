@@ -40,3 +40,12 @@ results = demand.estimate()
 
 % Estimate alpha nonlinearly
 gmm_funcs(demand);
+
+market = Market(demand);
+market.var.firm = 'firm';
+% market.settings.paneltype = 'none';
+market.var.panel = 'product';
+market.var.exog = 'time';
+market.init();
+alpha = -.3
+theta = market.estimateGMM( alpha)
