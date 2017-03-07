@@ -225,6 +225,9 @@ program .marketcalc , rclass
 	if("`.estout'" != "" ) {
 		eststo `.estout'
 		capture estadd matrix elasticities = r(elasticities) : `.estout'	
+		capture estadd matrix costs = r(`.prefix'costs) : `.estout'	
+		capture estadd matrix lerner = r(`.prefix'lerner) : `.estout'	
+		capture estadd matrix price = r(`.price') : `.estout'	
 	}
 	
 	return add
