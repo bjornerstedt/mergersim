@@ -1,10 +1,10 @@
-program J_resid_nested
+program resid_nested
 	version 13
 	syntax varlist if, at(name) regressors(varlist)
 *	quietly {
 		tempvar xb delta e
 		* varlist contains name of variable to return residuals in:
-		local epsilon : word 1 of `varlist'		
+		local epsilon : word 1 of `varlist'
 		* Local matrix `at' contains alpha parameter
 		gen `delta' = M_ls - _Ptablets * `at'[1,1] `if'
 		* Regress M_ls on other regressors
@@ -12,6 +12,6 @@ program J_resid_nested
 		predict double `e', residuals
 		* Put result in return variable `epsilon':
 		quietly replace `epsilon' = `e'
-		
+
 *	}
 end

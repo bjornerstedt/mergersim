@@ -1,4 +1,4 @@
-program J_resid_mk
+program resid_mk
 	* Simultaneous estimation of demand and costs
 	* Calculates costs unless price and share options are set, in which case
 	* a single product cost calculation with unnested logit is performed
