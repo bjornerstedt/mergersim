@@ -6,6 +6,6 @@ Stata GMM
 
 Uses
 
-- resid_nested.ado -
+- resid_nested.ado - Simple gmm estimate
 - resid_mk.ado - panel. add price() and share() options for fast calc of single product firms.
 - resid_cond.ado - estimate conduct with dummy for collusive period

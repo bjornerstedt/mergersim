@@ -5,7 +5,6 @@ import delimited simdata.csv, clear
 xtset productid marketid
 gen ms = 1
 * Select nested or simple logit
-* mergersim init, price(Ptablets) nests(form substance) quantity(Xtablets) marketsize(BL1) firm(firm)
 mergersim init, price(p) nests(type) quantity(q) marketsize(ms) firm(firm)
 
 //  demeaned price has underscore, non-demeaned is needed for cost calc.
@@ -15,7 +14,11 @@ clonevar `price' = `r(pricevar)'
 
 local endog `r(loggroupshares)'
 local exog  x
-local instr nprod_*
+* Instrument w is needed in order for the GMM estimation to be the same as the
+* demand estimation, as the GMM estimation uses all exogenous variabes as instruments
+* and w is a cost variable.
+
+local instr nprod_* w
 
 * Shares sh are needed for single product firm calcs
 * gen sh = q
@@ -24,13 +27,13 @@ local instr nprod_*
 di "xtivreg2 M_ls `exog' ( `price' `endog' = `instr'), fe"
 xtivreg2 M_ls `exog' ( `price' `endog' = `instr'), fe
 xtivreg2 M_ls `exog' ( `price' `endog' = `instr'), fe gmm robust
-exit
+
 ***************************************************************
 * Demean vars:
 tempvar mv
 quietly {
 foreach var of varlist M_ls  `price' `endog' `exog' `instr' {
-	egen `mv' = mean(`var'), by(product)
+	egen `mv' = mean(`var'), by(productid)
 	replace `var' = `var' - `mv'
 	drop `mv'
 }
@@ -42,7 +45,6 @@ ivreg2 M_ls `exog' ( `price' `endog' = `instr')
 * Here is the difference, TSLS and GMM give different results:
 ivregress 2sls M_ls `exog' ( `price' `endog' = `instr') , nocons
 ivregress gmm M_ls `exog' ( `price' `endog' = `instr') , nocons
-
 
 * reg M_ls  `price' `endog' `exog'
 
@@ -66,21 +68,21 @@ winitial(unadjusted, independent) wmatrix(robust) from(`price' -1)
 * TSLS result:
 gmm resid_nested, nequations(1) parameters(d:`price') regressors(`endog' `exog' ) ///
 instruments(`instr' `exog' , noconstant) twostep ///
-winitial(identity) wmatrix(unadjusted) from(`price' -1)
+winitial(identity) wmatrix(unadjusted) from(`price' -1)  price(`price')
 
 tempvar delta
 matrix est = e(b)
-gen `delta' = M_ls - _Ptablets * est[1,1]
+gen `delta' = M_ls - `price' * est[1,1]
 reg `delta' `endog' `exog'
 
 * GMM result:
 gmm resid_nested, nequations(1) parameters(d:`price') regressors(`endog' `exog' ) ///
 instruments(`instr' `exog' , noconstant) twostep ///
-winitial(unadjusted) wmatrix(robust) from(`price' -1) vce(robust)
+winitial(unadjusted) wmatrix(robust) from(`price' -1) vce(robust)  price(`price')
 
 tempvar delta
 matrix est = e(b)
-gen `delta' = M_ls - _Ptablets * est[1,1]
+gen `delta' = M_ls - `price' * est[1,1]
 reg `delta' `endog' `exog'
 
 exit

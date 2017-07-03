@@ -65,7 +65,7 @@ winitial(unadjusted, independent) wmatrix(robust) from(`price' -1)
 * TSLS result:
 gmm resid_nested, nequations(1) parameters(d:`price') regressors(`endog' `exog' ) ///
 instruments(`instr' `exog' , noconstant) twostep ///
-winitial(identity) wmatrix(unadjusted) from(`price' -1)
+winitial(identity) wmatrix(unadjusted) from(`price' -1)  price(`price')
 
 tempvar delta
 matrix est = e(b)
@@ -75,7 +75,7 @@ reg `delta' `endog' `exog'
 * GMM result:
 gmm resid_nested, nequations(1) parameters(d:`price') regressors(`endog' `exog' ) ///
 instruments(`instr' `exog' , noconstant) twostep ///
-winitial(unadjusted) wmatrix(robust) from(`price' -1) vce(robust)
+winitial(unadjusted) wmatrix(robust) from(`price' -1) vce(robust) price(`price')
 
 tempvar delta
 matrix est = e(b)
