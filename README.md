@@ -1,6 +1,6 @@
 # Mergersim 2
 
-Mergersim 2 is an update of the __mergersim__ package, [published in the Stata Journal](https://www.stata-journal.com/article.html?article=st0349), a Stata package for merger simulation with nested logit demand. It is currently a beta version, requiring some testing. For a description of new features, read the [update documentation](https://github.com/bjornerstedt/mergersim/blob/master/docs/mergersim2.pdf).
+Mergersim 2 is an update of the __mergersim__ package, [as decribed in the Stata Journal](https://www.stata-journal.com/article.html?article=st0349), a Stata package for merger simulation with nested logit demand. It is currently a beta version, requiring some testing. For a description of new features, read the [update documentation](https://github.com/bjornerstedt/mergersim/blob/master/docs/mergersim2.pdf).
 
 ## Installation
 
