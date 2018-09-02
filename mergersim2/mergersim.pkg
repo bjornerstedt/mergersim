@@ -1,9 +1,9 @@
 v 3
 d MERGERSIM 2 - Merger Simulation Package for Stata
-d Jonas Björnerstedt, Swedish Competition Authority and University of Leuven
+d Jonas Bjornerstedt, Sodertorn University
 d Frank Verboven, University of Leuven
-d 
-d Distribution-Date: 20150201
+d
+d Distribution-Date: 20180822
 d
 f mergersim.ado
 f mergersim.sthlp
