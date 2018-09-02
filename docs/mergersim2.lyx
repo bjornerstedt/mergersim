@@ -1,0 +1,4111 @@
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Market analysis with mergersim 2 
+\end_layout
+
+\begin_layout Author
+Jonas Björnerstedt and Frank Verboven
+\end_layout
+
+\begin_layout Date
+December 18, 2017
+\end_layout
+
+\begin_layout Abstract
+In Björnerstedt & Verboven (2014) an implementation of merger simulation
+ with the Stata package mergersim was introduced.
+ In this paper extensions to the package are presented, implemented in the
+ package mergersim2.
+ The package mergersim2 implements more demand specifications, including
+ three level nests and nest specific parameters in the nested logit, and
+ the PCAIDS demand model of Epstein & Rubinfeld.
+ Demand can be calibrated from a specification of demand elasticities.
+ It also extends the merger analysis to include partial ownership and more
+ general specifications of firm conduct.
+ In addition upward pricing pressure (UPP) can be calculated as well as
+ SSNIP tests.
+ The package has also been extended to better allow for other kinds of market
+ analysis.
+\end_layout
+
+\begin_layout Standard
+Björnerstedt & Verboven (2014) introduced a Stata package, mergersim, to
+ facilitate the quantative analysis of mergers using merger simulation methods.
+ Other kinds of market analysis, relevant in competition policy analysis
+ were not addressed by the program, however.
+ With the development of mergersim2, the package now incorporates a new
+ set of tools for market analysis.
+ The purpose of this document is to show how the new features can be used,
+ and to provide the underlying analysis.
+ It is intended to be read in conjunction with Björnerstedt & Verboven (2014),
+ which explains the basic functionality of mergersim.
+ 
+\end_layout
+
+\begin_layout Standard
+The primary goal of mergersim was to create a platform for merger simulation.
+ As demand analysis and the tools in the program could be used for other
+ problems in market analysis in general and competition policy in particular,
+ mergersim2 incorporates many changes in this direction.
+ The new features focus on the analysis market power, pricing and extending
+ the set of demand models of mergersim.
+ There is also a more complicated example includet, that illustrates handling
+ of uncertainty with a parametric bootstrap in the setting of merger simulations.
+\end_layout
+
+\begin_layout Standard
+The new features of mergersim2 are presented in the next section.
+ The following section contain presentation of the analysis and derivations
+ used in these features.
+ Sections 2 and 3 show how upward pricing pressure and SSNIP-tests are calculate
+d in a multi-product setting.
+ Analysis of demand with joint ownership is presented in section 4.
+ The appendices document the derivations of three level nested logit demand,
+ and the matrix algebra used for the share jacobian in merger simulation.
+\end_layout
+
+\begin_layout Section
+Using mergersim 2
+\end_layout
+
+\begin_layout Standard
+The new features of mergersim2 are implemented in the framework of the previous
+ version of the program, using new subcomands and new options to existing
+ subcommands.
+ It is an extension of mergersim, with complete backwards compatibility.
+ 
+\end_layout
+
+\begin_layout Subsection
+Program Status
+\end_layout
+
+\begin_layout Standard
+The new version of mergersim is nearing completion.
+ Currently there are a few new features that have not been completed.
+ Updated versions can be installed as indicated below, and the latest version
+ of the documentation is available at: 
+\begin_inset Flex URL
+status collapsed
+
+\begin_layout Plain Layout
+
+www.bjornersted.org/stata/mergersim2/new_features.pdf
+\end_layout
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Subsection
+Installation
+\end_layout
+
+\begin_layout Standard
+The new program mergersim2 is implemented as a new version of mergersim,
+ documented in Björnerstedt & Verboven (2014).
+ Due to limitations of Stata, both programs 
+\emph on
+cannot
+\emph default
+ be installed on the same computer
+\begin_inset Foot
+status collapsed
+
+\begin_layout Plain Layout
+If a previous version of mergersim has been installed, it can be removed
+ before installing mergersim2 with the Stata command 
+\family typewriter
+ado uninstall mergersim
+\family default
+.
+\end_layout
+
+\end_inset
+
+.
+ To install mergersim2, the following commands are executed in Stata:
+\end_layout
+
+\begin_layout Verbatim
+net from http://www.bjornerstedt.org/stata/mergersim2 
+\end_layout
+
+\begin_layout Verbatim
+net install mergersim
+\end_layout
+
+\begin_layout Standard
+Once installed, mergersim2 is updated with the Stata command:
+\end_layout
+
+\begin_layout Verbatim
+adoupdate, update
+\end_layout
+
+\begin_layout Subsection
+Example market
+\end_layout
+
+\begin_layout Standard
+Examples will be based on the example dataset of automobile sales in Europe
+ cars1.dta, included with mergersim.
+ The mergersim initialization and estimation commands will be the same for
+ all examples.
+ For expositional purposes we have chosen not to discuss questions of endogeneit
+y of prices and group shares, using the Stata command 
+\family typewriter
+xtreg
+\family default
+.
+ In any real application the usere must of course handle these issues properly,
+ using for example 
+\family typewriter
+xtivreg
+\family default
+ instead.
+ 
+\end_layout
+
+\begin_layout Verbatim
+mergersim init, nests(segment domestic) price(price) ///
+\end_layout
+
+\begin_layout Verbatim
+  quantity(qu) marketsize(MSIZE) firm(firm) 
+\end_layout
+
+\begin_layout Verbatim
+xtreg M_ls price M_lsjh M_lshg horsepower fuel width height domestic ///
+\end_layout
+
+\begin_layout Verbatim
+  year country2-country5, fe
+\end_layout
+
+\begin_layout Standard
+Market analysis and simulation will in all cases be on the year 2008, in
+ Germary (country 3).
+ For example mergersim market is constrained to this market by the command:
+\end_layout
+
+\begin_layout Verbatim
+mergersim market if year == 1998 & country == 3 
+\end_layout
+
+\begin_layout Subsection
+UPP and Consumer Surplus
+\end_layout
+
+\begin_layout Standard
+When performing a merger simulation with mergersim2, the Upward Pricing
+ Pressure (UPP) can be also be calculated, using the 
+\family typewriter
+upp
+\family default
+ option to 
+\family typewriter
+mergersim simulate
+\family default
+.
+ With the command
+\end_layout
+
+\begin_layout Verbatim
+mergersim simulate if year == 1998 & country == 3 , ///
+\end_layout
+
+\begin_layout Verbatim
+seller(15) buyer(26) detail upp 
+\end_layout
+
+\begin_layout Standard
+The output of 
+\family typewriter
+mergersim simulate
+\family default
+ is given by Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Calculated-group-elasticities"
+
+\end_inset
+
+.
+ Note that in the current version the absolute price change is reported
+ in the table, not percentage changes.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename paper_figures/stata_upp.png
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+UPP results
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The detail option specifies that market shares before and after the merger
+ are also displayed.
+ In addition, the Herfindahl (HHI), C4 and C8 concentration ideces are included.
+ With mergersim2 the consumer and producer surplus are also included in
+ this detailed output, as shown in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:CS"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename paper_figures/stata_cs.png
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+Concentration indeces and surplus
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:CS"
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The code used can be found in example2.do.
+\end_layout
+
+\begin_layout Subsection
+Market analysis
+\end_layout
+
+\begin_layout Standard
+Simulation of market outcomes can be of importance in many other contexts,
+ however.
+ Changes in product characteristics or marginal costs, for example by the
+ imposition of a sales tax.
+ In the context of competition policy, one can wish to study for exampel
+ abuse of dominance in analyzing to what extent raising rivals' costs increases
+ sales and profits of the dominant firm.
+ 
+\end_layout
+
+\begin_layout Standard
+Given a demand specification, 
+\family typewriter
+mergersim simulate
+\family default
+ can be used to study the equilibrium effect of a change in market conditions.
+ In mergersim2 the options 
+\family typewriter
+buyer()
+\family default
+ and 
+\family typewriter
+seller() 
+\family default
+are now optional, only to be used if changes in ownership are to be studied.
+ The command 
+\family typewriter
+mergersim simulate
+\family default
+ can be used not only to study the effects of changes in ownership, but
+ also the effects of for instance
+\end_layout
+
+\begin_layout Enumerate
+Changes in costs, using the 
+\family typewriter
+newcosts() 
+\family default
+option
+\end_layout
+
+\begin_layout Enumerate
+Changes in the property of products, such as horsepower, using the 
+\family typewriter
+newdelta() 
+\family default
+option
+\end_layout
+
+\begin_layout Enumerate
+Introduction or removal of products
+\end_layout
+
+\begin_layout Enumerate
+Changes in conduct, using the 
+\family typewriter
+newconduct() 
+\family default
+option
+\end_layout
+
+\begin_layout Standard
+We will illustrate the first three features, with a market simulation after
+ both cost and product changes, and with a firm exiting the market.
+ 
+\end_layout
+
+\begin_layout Standard
+The command 
+\family typewriter
+mergersim market
+\family default
+ calculates various variables that can be used in market analysis.
+ 
+\end_layout
+
+\begin_layout Labeling
+\labelwidthstring 00.00.0000
+M_costs contains the marginal costs per product, calculated based on the
+ estimated demand and assumptions on market competition.
+ They are the costs that would result in observed prices and demand.
+ 
+\end_layout
+
+\begin_layout Labeling
+\labelwidthstring 00.00.0000
+M_delta contains the average utility of each product in each market excluding
+ the price effect.
+ In the current example it includes the effect of horsepower, fuel, width
+ and height, as well as market specific constants.
+\end_layout
+
+\begin_layout Standard
+To generate these variables in the market to be studied, after initializing
+ mergersim and estimating demand as discussed above, the following command
+ is used:
+\end_layout
+
+\begin_layout Verbatim
+mergersim market if year == 1998 & country == 3
+\end_layout
+
+\begin_layout Standard
+To increase costs by 5%, a new variable is generated
+\end_layout
+
+\begin_layout Verbatim
+gen costs2 = 1.05*M_costs 
+\end_layout
+
+\begin_layout Standard
+Similarly, we create a new variable for the new utility of each product.
+ Here an increase in horsepower of 50% for VW results in higher utility
+ for these products.
+ It is a product of the following terms: 
+\end_layout
+
+\begin_layout Enumerate
+the increase in horsepower:
+\family typewriter
+ horsepower*0.5
+\end_layout
+
+\begin_layout Enumerate
+the estimated marginal effect of horsepower on utility: 
+\family typewriter
+_b[horsepower]
+\end_layout
+
+\begin_layout Enumerate
+a dummy for VW: 
+\family typewriter
+(firm==26)
+\end_layout
+
+\begin_layout Verbatim
+gen delta2 = M_delta + horsepower*0.5*_b[horsepower]*(firm==26) 
+\end_layout
+
+\begin_layout Standard
+Once these variables have been created, a market simulation can be performed
+\end_layout
+
+\begin_layout Verbatim
+mergersim simulate if year == 1998 & country == 3 & firm != 4, /// 
+\end_layout
+
+\begin_layout Verbatim
+  newdelta(delta2) newcosts(costs2)  
+\end_layout
+
+\begin_layout Standard
+By excluding firm 4 from the simulation, Fiat exits the market.
+ The new costs and utility are included with the options on the second line
+ of the command.
+ The results of the simulation are shown in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:market"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename paper_figures/stata_market.png
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+Market simulation with cost, utility and product changes 
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:market"
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The code used can be found in example2.do.
+ 
+\begin_inset Note Note
+status open
+
+\begin_layout Plain Layout
+References to mergers have to be changed to market in this case.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+SSNIP and Analysis of Demand
+\end_layout
+
+\begin_layout Standard
+After estimating or specifying demand parameters, mergersim can perform
+ a SSNIP test.
+ With costs calculated based on the market competition assumption, the profitabi
+lity of a price increase of a set of products can be evaluated.
+ To perform a SSNIP test of a 5 percent price increase, the following command
+ is used:
+\end_layout
+
+\begin_layout Verbatim
+mergersim demand if year == 1998 & country == 3 , ssnip(0.05)
+\end_layout
+
+\begin_layout Standard
+The resultant output is given in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:ssnip"
+
+\end_inset
+
+.
+ 
+\begin_inset Note Note
+status open
+
+\begin_layout Plain Layout
+Show a test of some car segment which fails a SSNIP test.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename paper_figures/stata_ssnip.png
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+SSNIP test, firm profits
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:ssnip"
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsubsection
+Analysis of Demand
+\end_layout
+
+\begin_layout Standard
+The estimated or specified demand function can be studied with mergersim2.
+ With the 
+\family typewriter
+mergersim demand
+\family default
+ command, one can study the non-equilibrium effect on demand of a set of
+ prices.
+ To see the effect of a 5 percent price increase in prices of products in
+ Germany, the following commands can be used
+\end_layout
+
+\begin_layout Verbatim
+generate newprice = 1.05*princ if country == 3
+\end_layout
+
+\begin_layout Verbatim
+mergersim demand if country == 3 , price(newprice)
+\end_layout
+
+\begin_layout Standard
+The generate command creates a new price variable with German prices five
+ percent higher.
+ The mergersim demand command generates the table in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:demand"
+
+\end_inset
+
+.
+ 
+\begin_inset Note Note
+status open
+
+\begin_layout Plain Layout
+Regenerate figure after improving mergersim demand output.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename paper_figures/stata_demand.png
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+Demand 
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:demand"
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The code is in example2.do.
+\end_layout
+
+\begin_layout Subsection
+Demand specification in mergersim2
+\end_layout
+
+\begin_layout Standard
+Nesting in mergersim has been extended to three level nests.
+ 
+\end_layout
+
+\begin_layout Standard
+Nest specific parameters.
+\end_layout
+
+\begin_layout Standard
+The rather tedious derivation of shares, equation to be estimated and share
+ jacobian for three level nests are given in Appendix 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sec:Nested-logit-derivations"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Subsubsection
+PCAIDS demand 
+\end_layout
+
+\begin_layout Standard
+Epstein & Rubinfeld (2002) introduced a demand model that could be calibrated
+ to a two specified elasticities and market demand.
+ The PCAIDS demand specification simply assumes that diversion to other
+ brands is in proportion to the market shares of that brand.
+ In mergersim2 demand can be specified as PCAIDS, using the 
+\family typewriter
+demand()
+\family default
+ option of 
+\family typewriter
+mergersim init
+\family default
+.
+ The following code replicates the calculations of Epstein & Rubinfeld (2002,
+ p 895).
+ It is assumed that there are three firms each producing a single good,
+ all with initial price 
+\begin_inset Formula $p=1$
+\end_inset
+
+.
+ Prices and value shares 
+\begin_inset Formula $q$
+\end_inset
+
+ are given by the following table:
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Tabular
+<lyxtabular version="3" rows="4" columns="3">
+<features tabularvalignment="middle">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+firm
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+p
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+q
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+0.2
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+2
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+0.3
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+3
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+0.5
+\end_layout
+
+\end_inset
+</cell>
+</row>
+</lyxtabular>
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Elasticities are given by .
+ The following code generates the dataset and evaluates a merger between
+ firms 1 and 2.
+ 
+\end_layout
+
+\begin_layout Verbatim
+matrix data = (1, 1, 0.2 
+\backslash
+ 2, 1, 0.3 
+\backslash
+ 3, 1, 0.5 ) 
+\end_layout
+
+\begin_layout Verbatim
+matrix colnames data = firm p q 
+\end_layout
+
+\begin_layout Verbatim
+svmat data , names(col) 
+\end_layout
+
+\begin_layout Verbatim
+
+\end_layout
+
+\begin_layout Verbatim
+mergersim init, demand(pcaids) elasticities(-1 -3) price(p) quantity(q)
+ firm(firm) 
+\end_layout
+
+\begin_layout Verbatim
+mergersim simulate , buyer(1) seller(2) 
+\end_layout
+
+\begin_layout Standard
+The results are shown in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:pcaids"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename paper_figures/stata_pcaids.png
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+Merger with PCAIDS demand
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:pcaids"
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Elasticities
+\end_layout
+
+\begin_layout Standard
+The new version of mergersim can calculate elasticities for price increases
+ within and between groups as specified by a grouping variable in the dataset.
+ The segment variable in the example cars1 dataset for example contains
+ information on the car segment of each car brand.
+ To see how percentage changes for all products in one segment affect demand
+ in different car segments, the groupelasticities option can be used as
+ shown below.
+\begin_inset Foot
+status collapsed
+
+\begin_layout Plain Layout
+In the syntax of Stata, /// at the end of a line indicates that the command
+ continues on the next line.
+\end_layout
+
+\end_inset
+
+ 
+\end_layout
+
+\begin_layout Verbatim
+mergersim market if year == 1998 & country == 3 , ///
+\end_layout
+
+\begin_layout Verbatim
+groupelasticities(segment)
+\end_layout
+
+\begin_layout Standard
+The resulting output of group elasticities by car segment for Germany in
+ 1998 is shown in Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "fig:Calculated-group-elasticities"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename paper_figures/stata_groupelasticities.png
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+Calculated group elasticities
+\begin_inset CommandInset label
+LatexCommand label
+name "fig:Calculated-group-elasticities"
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+
+\end_layout
+
+\begin_layout Standard
+The elasticity matrix is saved in the r(groupelasticities) matrix in the
+ output returned by mergersim market.
+ Product level elasticites are saved in the r(elas) matrix.
+ The code used can be found in example2.do.
+ For a description of how elasticities are calculated, see Appendix 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "subsec:Group-elasticities"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Subsubsection
+Calibration from elasticities
+\end_layout
+
+\begin_layout Standard
+An alternative to estimating the nested logit parameters 
+\begin_inset Formula $\alpha$
+\end_inset
+
+ and 
+\begin_inset Formula $\sigma_{i}$
+\end_inset
+
+ is calibration - to explicity specify them.
+ In 
+\family typewriter
+mergersim market
+\family default
+ the following code is used.
+ 
+\end_layout
+
+\begin_layout Verbatim
+mergersim market if year == 1998 & country == 3, elasticities(-5.5 0.4 0.03)
+\end_layout
+
+\begin_layout Standard
+For a two level nested logit demand model as above, three elasticities are
+ specified: 
+\begin_inset Note Note
+status open
+
+\begin_layout Plain Layout
+Perhaps elasticities should be specified more like in the PCAIDS model
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Enumerate
+the average own price elasticity
+\end_layout
+
+\begin_layout Enumerate
+the average cross price elasticity with respect to another product in the
+ same subgroup
+\end_layout
+
+\begin_layout Enumerate
+the average cross price elasticity with respect to another product in the
+ same group
+\end_layout
+
+\begin_layout Standard
+Note that as the elasticities depend on market shares, the 
+\begin_inset Formula $\alpha$
+\end_inset
+
+ and 
+\begin_inset Formula $\sigma_{i}$
+\end_inset
+
+ that correspond to a given set of elasticities will vary by market.
+ See Appendix 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "sec:Elasticities"
+
+\end_inset
+
+ for a derivation.
+ For this reason calibration from 
+\family typewriter
+elasticity
+\family default
+ requires the specification of a single market, in the example above Germany
+ (country 3) in 1998.
+ 
+\end_layout
+
+\begin_layout Subsection
+Estout support
+\end_layout
+
+\begin_layout Standard
+The estout package provides a simple way of creating tables of results.
+\begin_inset Foot
+status collapsed
+
+\begin_layout Plain Layout
+To install the estout package, use the command 
+\family typewriter
+ssc install estout
+\family default
+.
+\end_layout
+
+\end_inset
+
+ By specifying the option 
+\family typewriter
+estout([name])
+\family default
+ in 
+\family typewriter
+mergersim init
+\family default
+, results of estimation, market analysis and merger simulation are stored.
+ To present tables of stored results, the estout can be used as indicated
+ by the table.
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Tabular
+<lyxtabular version="3" rows="5" columns="2">
+<features tabularvalignment="middle">
+<column alignment="left" valignment="top">
+<column alignment="left" valignment="top">
+<row>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+Description
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+estout command
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Display all estimates
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+estout 
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Display estimates starting with C
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+estout C*
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Display price changes
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+estout , cells(price_ch)
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Display elasticities
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+estout , cells(elasticities)
+\end_layout
+
+\end_inset
+</cell>
+</row>
+</lyxtabular>
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Merger simulation and uncertainty
+\end_layout
+
+\begin_layout Standard
+In this section we will illustrate how to obtain confidence intervals on
+ a merger simulation using a parametric bootstrap.
+ In order to do this, a little more knowledge of Stata programming is required.
+ Specifically, matrices, local macros, temporary files, and a programming
+ loop (forwhile) are used.
+ See the Stata Users Guide for more information on these topics.
+\end_layout
+
+\begin_layout Standard
+After initializing and estimating, mergersim market is invoked to create
+ matrices of the estimate (M_demand_b) and variance-covariance matrix (M_demand_
+V) for the three parameters that will be randomly sampled: 
+\begin_inset Formula $\alpha$
+\end_inset
+
+, 
+\begin_inset Formula $\sigma_{1}$
+\end_inset
+
+ and 
+\begin_inset Formula $\sigma_{2}$
+\end_inset
+
+.
+\begin_inset Note Note
+status open
+
+\begin_layout Plain Layout
+These should be r() matrices rather than using the prefix.
+\end_layout
+
+\end_inset
+
+ 
+\end_layout
+
+\begin_layout Verbatim
+mergersim init, nests(segment domestic) price(price) ///
+\end_layout
+
+\begin_layout Verbatim
+  quantity(qu) marketsize(MSIZE) firm(firm) 
+\end_layout
+
+\begin_layout Verbatim
+xtreg M_ls price M_lsjh M_lshg horsepower fuel width height domestic year
+ country2-country5, fe
+\end_layout
+
+\begin_layout Verbatim
+mergersim market 
+\end_layout
+
+\begin_layout Standard
+Now two temporary files are created, one with the market to be studied,
+ the other an empty dataset to which each simulation will be appended.
+\end_layout
+
+\begin_layout Verbatim
+keep if year == 1998 & country == 3 
+\end_layout
+
+\begin_layout Verbatim
+tempfile market bootstrap 
+\end_layout
+
+\begin_layout Verbatim
+save `market' 
+\end_layout
+
+\begin_layout Verbatim
+drop if 1 // Save empty dataset 
+\end_layout
+
+\begin_layout Verbatim
+save `bootstrap' , replace 
+\end_layout
+
+\begin_layout Standard
+A matrix params is created with ndraws random draws (here set to 100) using
+ the matrices created by mergersim market.
+ Setting a seed for the pseudo random number generator ensures that the
+ same draws are used, enabling reproduction of the calculations.
+\end_layout
+
+\begin_layout Verbatim
+local ndraws 100 
+\end_layout
+
+\begin_layout Verbatim
+set seed 1
+\end_layout
+
+\begin_layout Verbatim
+drawnorm alpha sigma1 sigma2, n(`ndraws') means(M_demand_b) cov(M_demand_V)
+ clear 
+\end_layout
+
+\begin_layout Verbatim
+mkmat alpha sigma1 sigma2, matrix(params) 
+\end_layout
+
+\begin_layout Standard
+Using the 
+\emph on
+ndraws
+\emph default
+ random draws, merger simulations for each are appended to the temporary
+ dataset 
+\emph on
+bootstrap
+\emph default
+.
+\end_layout
+
+\begin_layout Verbatim
+forvalues i = 1/`ndraws' { 
+\end_layout
+
+\begin_layout Verbatim
+	use `market' , clear
+\end_layout
+
+\begin_layout Verbatim
+	local alpha = params[`i',1]
+\end_layout
+
+\begin_layout Verbatim
+	local sigma1 = params[`i',2]
+\end_layout
+
+\begin_layout Verbatim
+	local sigma2 = params[`i',3]
+\end_layout
+
+\begin_layout Verbatim
+
+\end_layout
+
+\begin_layout Verbatim
+	quietly mergersim init, nests(segment domestic) price(price) quantity(qu)
+ ///
+\end_layout
+
+\begin_layout Verbatim
+		marketsize(MSIZE) firm(firm) alpha(`alpha') sigmas(`sigma1' `sigma2')
+ 
+\end_layout
+
+\begin_layout Verbatim
+	quietly mergersim simulate , seller(15) buyer(26)
+\end_layout
+
+\begin_layout Verbatim
+
+\end_layout
+
+\begin_layout Verbatim
+	quietly append using `bootstrap'
+\end_layout
+
+\begin_layout Verbatim
+	quietly save `bootstrap' , replace  
+\end_layout
+
+\begin_layout Verbatim
+}
+\end_layout
+
+\begin_layout Verbatim
+
+\end_layout
+
+\begin_layout Verbatim
+tabstat M_price_ch , by(firm) statistics(mean sd) format(%9.3f)  
+\end_layout
+
+\begin_layout Section
+Joint ownership in merger simulation
+\end_layout
+
+\begin_layout Standard
+In this section we discuss how one can handle issues of joint ownership
+ in mergersim2.
+ Market analysis or mergers where there is joint ownership complicates the
+ analysis.
+ We will discuss briefly how joint ownership can be handled conceptually,
+ and then present the implementation in mergersim2.
+\end_layout
+
+\begin_layout Standard
+Let 
+\begin_inset Formula $p_{m}$
+\end_inset
+
+, 
+\begin_inset Formula $q_{m}$
+\end_inset
+
+ and 
+\begin_inset Formula $c_{m}$
+\end_inset
+
+ denote vectors of prices, quantities and marginal costs per product.
+ Calculation of costs and equilibrium prices in a market are based on the
+ first order condition of profit maximization.
+\begin_inset Formula 
+\[
+R_{m}\odot D_{m}\left(p_{m}-c_{m}\right)+q_{m}=0
+\]
+
+\end_inset
+
+The matrix 
+\begin_inset Formula $D_{m}$
+\end_inset
+
+ is the demand jacobian where element 
+\begin_inset Formula $\left(i,j\right)$
+\end_inset
+
+ is the derivative of the demand for good 
+\begin_inset Formula $i$
+\end_inset
+
+ with respect to price 
+\begin_inset Formula $j$
+\end_inset
+
+.
+ The ownership matrix 
+\begin_inset Formula $R_{m}$
+\end_inset
+
+ in market 
+\begin_inset Formula $m$
+\end_inset
+
+ identifies which products belong to the same firm, with element 
+\begin_inset Formula $\left(i,j\right)$
+\end_inset
+
+ set to 1 if they have the same owner, otherwise zero.
+ 
+\end_layout
+
+\begin_layout Standard
+The ownership matrix 
+\begin_inset Formula $R$
+\end_inset
+
+ is created from the firm variable specified by the user by first creation
+ of a binary product matrix 
+\begin_inset Formula $F$
+\end_inset
+
+, with rows for each product and columns for each firm, with a 1 if the
+ firm owns the product.
+ For example, with 3 products and 2 firms the matrix
+\begin_inset Formula 
+\[
+F_{m}=\left(\begin{array}{cc}
+1 & 0\\
+0 & 1\\
+0 & 1
+\end{array}\right)
+\]
+
+\end_inset
+
+indicates that firm 2 owns two goods.
+ We then have
+\begin_inset Formula 
+\[
+R_{m}=F_{m}F'_{m}
+\]
+
+\end_inset
+
+Assume that the market has three firms, with a product each.
+ If firm is owned by firm 1 and 2 with shares
+\begin_inset Formula $\alpha$
+\end_inset
+
+ and 
+\begin_inset Formula $1-\alpha$
+\end_inset
+
+ respectively.
+ Partial ownership can be incorporated by letting the ownership materix
+ depend on product ownership 
+\begin_inset Formula $F_{m}$
+\end_inset
+
+ and firm ownership 
+\begin_inset Formula $S$
+\end_inset
+
+ matrices: 
+\begin_inset Formula 
+\[
+R_{m}=F_{m}SF'_{m}
+\]
+
+\end_inset
+
+In the simple setting with three firms each owning one product, we have
+ 
+\begin_inset Formula $R_{m}=S$
+\end_inset
+
+.
+ The element 
+\begin_inset Formula $\left(i,j\right)$
+\end_inset
+
+ of 
+\begin_inset Formula $S$
+\end_inset
+
+ indicates to what extent firm 
+\begin_inset Formula $i$
+\end_inset
+
+ includes the effect of profits of firm 
+\begin_inset Formula $j$
+\end_inset
+
+ in its profit maximization.
+\end_layout
+
+\begin_layout Standard
+For an owning firm, if profits of the subsiduary are split according to
+ ownership shares, the revenues of the subsiduary should enter the maximization
+ problem with the same weight 
+\begin_inset Formula $\alpha$
+\end_inset
+
+.
+ With joint ownership, how profits are maximized in the jointly owned firm
+ matters.
+ Three different assumptions come to mind.
+ 
+\end_layout
+
+\begin_layout Itemize
+With 
+\emph on
+total profit maximization, 
+\emph default
+prices of the jointly owned firm are set to maximize the total profit, the
+ idea being that with an optimal contract between owners such pricing would
+ be chosen.
+ (Whether such contracting is possible or legal is another question.) 
+\begin_inset Formula 
+\[
+S_{T}=\left(\begin{array}{ccc}
+1 & 0 & a\\
+0 & 1 & 1-a\\
+1 & 1 & 1
+\end{array}\right)
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Itemize
+With 
+\emph on
+weighted profit maximization
+\emph default
+ the subsiduary maximizes the weighted sum of the profit functions of itself
+ and the owners , with weights corresponding to ownership shares.
+\begin_inset Formula 
+\[
+S_{W}=\left(\begin{array}{ccc}
+1 & 0 & a\\
+0 & 1 & 1-a\\
+a & 1-a & 1
+\end{array}\right)
+\]
+
+\end_inset
+
+With 
+\emph on
+own profit maximization
+\emph default
+ the subsiduary maximizes its own profits.
+\begin_inset Formula 
+\[
+S_{O}=\left(\begin{array}{ccc}
+1 & 0 & a\\
+0 & 1 & 1-a\\
+0 & 0 & 1
+\end{array}\right)
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+In the following, we will focus on 
+\emph on
+weighted
+\emph default
+ profit maximization.
+ 
+\end_layout
+
+\begin_layout Standard
+With more complicated ownership structures than in the example above, creating
+ an ownership matrix becomes more complicated.
+ Consider the ownership shares of 4 goods and 3 firms.
+ Product 3 is jointly owned by 1 and 2, and product 4 is owned by 1 and
+ 3 as in the following table 
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Tabular
+<lyxtabular version="3" rows="5" columns="4">
+<features tabularvalignment="middle">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+2
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+3
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+2
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+3
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+a
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1-a
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+4
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+b
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1-b
+\end_layout
+
+\end_inset
+</cell>
+</row>
+</lyxtabular>
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The question is whether indirect ownership should be taken into account.
+ With weighted profit maximization, defining the ownership matrix as above,
+ we obtain 
+\begin_inset Formula 
+\[
+S_{W}=\left(\begin{array}{cccc}
+1 & 0 & a & b\\
+0 & 1 & 1-a & 0\\
+a & 1-a & 1 & 1-b\\
+b & 0 & 1-b & 1
+\end{array}\right)
+\]
+
+\end_inset
+
+Here the effect that firm 4 has on firm 2 is ignored by firm 4, as the ownership
+ is indirect.
+ In order for this effect to be taken into account, the corresponding cell
+ has to be changed: 
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+S_{W'}=\left(\begin{array}{cccc}
+1 & 0 & a & b\\
+0 & 1 & 1-a & 0\\
+a & 1-a & 1 & 1-b\\
+b & \mathbf{\left(1-a\right)\left(1-b\right)} & 1-b & 1
+\end{array}\right)
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Generation of ownership in mergersim
+\end_layout
+
+\begin_layout Standard
+In order to implement joint ownership in a simple way, it is advantageous
+ to distinguish between products ownership by firms and the ownership of
+ other firms by firms.
+ The 
+\begin_inset Formula $p\times f$
+\end_inset
+
+ product matrix 
+\begin_inset Formula $F$
+\end_inset
+
+ defines which firm (or subsiduary) that produces the product, created from
+ the firm categorical variable in the dataset.
+ The 
+\begin_inset Formula $r\times r$
+\end_inset
+
+ firm matrix 
+\begin_inset Formula $S$
+\end_inset
+
+ defines joint ownership.
+ 
+\end_layout
+
+\begin_layout Standard
+In mergersim 1 the firm ownership matrix 
+\begin_inset Formula $S$
+\end_inset
+
+ is implicitly an identity matrix, unless the conduct option is specified.
+ In this case, the off-diagonal elements of 
+\begin_inset Formula $S$
+\end_inset
+
+ are set to the value 
+\begin_inset Formula $\theta$
+\end_inset
+
+ that the user specifies.
+ 
+\end_layout
+
+\begin_layout Standard
+There are two methods of creating joint ownership in mergersim 2.
+ The ownership matrix can be created by the user as a Stata matrix with
+ the name M_ownership.
+ If a matrix with this name exists it will be automatically used by mergersim.
+ Alternatively mergersim can assist in the creation of the matrix.
+ Joint ownership is specified in a Stata dataset with three variables in
+ the following order.
+ 
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Tabular
+<lyxtabular version="3" rows="3" columns="3">
+<features tabularvalignment="middle">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Firm
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Owner
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Share
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+3
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $\alpha$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+3
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+2
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $1-\alpha$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+</lyxtabular>
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Several joint ownerships can be specified in the dataset.
+ Mergersim replaces the off-diagonal zero elements
+\begin_inset Formula $\left(3,1\right)$
+\end_inset
+
+ and 
+\begin_inset Formula $\left(1,3\right)$
+\end_inset
+
+ in the identity matrix with 
+\begin_inset Formula $\alpha$
+\end_inset
+
+ and 
+\begin_inset Formula $\left(3,2\right)$
+\end_inset
+
+ and 
+\begin_inset Formula $\left(2,3\right)$
+\end_inset
+
+ with 
+\begin_inset Formula $1-\alpha$
+\end_inset
+
+.
+ Ownership is specified in mergersim market with the option 
+\family typewriter
+\series bold
+ownership([name of dataset])
+\family default
+\series default
+.
+\end_layout
+
+\begin_layout Standard
+If the structure of joint ownership changes over time, this can be also
+ be handled.
+ Assume that the ownership shares of firm 3 changes to 
+\begin_inset Formula $\beta$
+\end_inset
+
+ and 
+\begin_inset Formula $1-\beta$
+\end_inset
+
+ at some time 
+\begin_inset Formula $t$
+\end_inset
+
+ in the data.
+ Let a new owner 4 replace firm 3 as owner in all observations after 
+\begin_inset Formula $t$
+\end_inset
+
+ and use the ownership dataset
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Tabular
+<lyxtabular version="3" rows="5" columns="3">
+<features tabularvalignment="middle">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Firm
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Owner
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Share
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+3
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $\alpha$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+3
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+2
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $1-\alpha$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+4
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $\beta$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+4
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+2
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $1-\beta$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+</lyxtabular>
+
+\end_inset
+
+ 
+\end_layout
+
+\begin_layout Standard
+Such a new firm can also be used to model a merger from partial ownership
+ to complete ownership by setting 
+\begin_inset Formula $\beta=1$
+\end_inset
+
+ above, letting firm 4 aquire firm 3 in the merger.
+\end_layout
+
+\begin_layout Standard
+A conduct parameter can be specified in mergersim to capture the degree
+ of competition between firms.
+ Specifying conduct 
+\begin_inset Formula $\theta$
+\end_inset
+
+ replaces all off-diagonal elements in the ownership matrix 
+\begin_inset Formula $S$
+\end_inset
+
+ by 
+\begin_inset Formula $\theta$
+\end_inset
+
+.
+ The ownership dataset can also be used to specify different conduct parameters,
+ rather than joint ownership.
+ To see what happens if firm 1 and 2 take the profit of the other firm into
+ account by 
+\begin_inset Formula $\theta$
+\end_inset
+
+, we use the following ownership dataset:
+\begin_inset Separator latexpar
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\align center
+\begin_inset Tabular
+<lyxtabular version="3" rows="2" columns="3">
+<features tabularvalignment="middle">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Firm
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Owner
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Share
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+2
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+1
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $\theta$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+</lyxtabular>
+
+\end_inset
+
+ 
+\end_layout
+
+\begin_layout Standard
+\align left
+The effect of this specification is that only elements
+\begin_inset Formula $\left(1,2\right)$
+\end_inset
+
+ and 
+\begin_inset Formula $\left(2,1\right)$
+\end_inset
+
+ of 
+\begin_inset Formula $S$
+\end_inset
+
+ are set to 
+\begin_inset Formula $\theta$
+\end_inset
+
+.
+ 
+\end_layout
+
+\begin_layout Standard
+The ownership matrix is used to specify how firms take the profits of other
+ firms into account and the product ownership is used to specify which firm
+ owns what.
+ Assumptions on conduct thus affect the ownership matrix, with the possibility
+ of pre- and post merger assumptions.
+ 
+\end_layout
+
+\begin_layout Itemize
+Note that the implementation of joint ownership in mergersim2 has not yet
+ been completed.
+\begin_inset Note Note
+status open
+
+\begin_layout Itemize
+Modify and incorporate /trunk/ownershipmatrix.do
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Newpage newpage
+\end_inset
+
+
+\end_layout
+
+\begin_layout Part*
+\start_of_appendix
+Appendix
+\end_layout
+
+\begin_layout Standard
+In the appendix, calculations of muliproduct UPP, shares and share Jacobian
+ for three level nests and calibration from elasticities are presented.
+\end_layout
+
+\begin_layout Section
+Multiproduct UPP 
+\end_layout
+
+\begin_layout Standard
+Let 
+\begin_inset Formula $\Delta q\left(p\right)$
+\end_inset
+
+ be the demand jacobian for all products of all firms, 
+\begin_inset Formula $D_{11}$
+\end_inset
+
+ be the submatrix of 
+\begin_inset Formula $\Delta q\left(p\right)$
+\end_inset
+
+ of elements where 
+\begin_inset Formula $i$
+\end_inset
+
+ and 
+\begin_inset Formula $j$
+\end_inset
+
+ are products of firm 1 and 
+\begin_inset Formula $D_{12}$
+\end_inset
+
+ be the submatrix of terms where 
+\begin_inset Formula $i$
+\end_inset
+
+ is a product of firm 1 and 
+\begin_inset Formula $j$
+\end_inset
+
+ is a product of firm 2.
+ (As all derivatives will be at pre-merger prices, the dependence of these
+ submatrices on 
+\begin_inset Formula $p$
+\end_inset
+
+ is surpressed.) The FOC for the set of products of firm 1 can be expressed
+ as
+\begin_inset Formula 
+\begin{equation}
+D_{11}(p_{1}-c_{1})+q_{1}=0\label{eq:pre-merger_foc}
+\end{equation}
+
+\end_inset
+
+As above, subscripts indicate sub-vectors of the products that belong to
+ firm 1 prior to the merger.
+ If firm 1 buys firm 2, these equations are modified as follows
+\begin_inset Formula 
+\begin{equation}
+D_{11}(p_{1}-(1-e_{1})c_{1})+D_{12}(p_{2}-c_{2})+q_{1}\label{eq:post-merger}
+\end{equation}
+
+\end_inset
+
+At pre-merger prices this expression will not be zero.
+ Subtracting, we can define the vector:
+\begin_inset Formula 
+\[
+UPP_{12}=-e_{1}c_{1}-D_{11}^{-1}D_{12}(p_{2}-c_{2})
+\]
+
+\end_inset
+
+The invertability of 
+\begin_inset Formula $D_{11}$
+\end_inset
+
+ is guaranteed by the existence of a unique pre-merger equilibrium.
+ The 
+\begin_inset Formula $j\times k$
+\end_inset
+
+ matrix 
+\begin_inset Formula 
+\[
+Div_{12}=-D_{11}^{-1}D_{12}
+\]
+
+\end_inset
+
+are the diversion ratios for each product 
+\begin_inset Formula $j$
+\end_inset
+
+ of firm 1 and 
+\begin_inset Formula $k$
+\end_inset
+
+ of firm 2.
+ 
+\end_layout
+
+\begin_layout Standard
+We can, along the lines of Schmalensee also define 
+\begin_inset Formula 
+\[
+UPP_{12}^{*}=-e_{1}c_{1}-D_{11}^{-1}D_{12}(p_{2}-\left(1-e_{2}\right)c_{2})
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Interpretation
+\end_layout
+
+\begin_layout Standard
+Let be the optimal price conditional on 
+\begin_inset Formula $p_{2}$
+\end_inset
+
+ and other firms
+\begin_inset Formula 
+\[
+D_{11}(p_{1}+\text{\Delta}p_{1}-(1-e_{1})c_{1})+D_{12}(p_{2}-c_{2})+q_{1}=0
+\]
+
+\end_inset
+
+Substituting 
+\begin_inset Formula $q_{1}$
+\end_inset
+
+ from (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:pre-merger_foc"
+
+\end_inset
+
+), we get 
+\begin_inset Formula 
+\[
+D_{11}(\text{\Delta}p_{1}+e_{1}c_{1})+D_{12}(p_{2}-c_{2})=0
+\]
+
+\end_inset
+
+Thus 
+\begin_inset Formula 
+\[
+UPP_{12}=\text{\Delta}p_{1}
+\]
+
+\end_inset
+
+
+\begin_inset Formula $UPP_{12}$
+\end_inset
+
+ is thus the optimal price change for the products of firm 1, given that
+ prices of other products including the products formerly owned by firm
+ 2 are unchanged.
+ The measure is the absolute price change rather than the relative change
+ measured in merger simulations, as the focus is on the direction of change
+ rather than the magnitude.
+\end_layout
+
+\begin_layout Subsection
+UPP and first iteration of fixed point
+\end_layout
+
+\begin_layout Standard
+The fixed point algorithm solves the following equation for prices post-merger:
+\begin_inset Formula 
+\[
+\left(\begin{array}{cc}
+D_{11} & D_{12}\\
+D_{21} & D_{22}
+\end{array}\right)\left(\begin{array}{c}
+p_{1}-c_{1}\\
+p_{2}-c_{2}
+\end{array}\right)+\left(\begin{array}{c}
+q_{1}\\
+q_{2}
+\end{array}\right)=0
+\]
+
+\end_inset
+
+The FOC for other products are solved seperately as ownership creates a
+ block diagonal matrix 
+\begin_inset Formula $D$
+\end_inset
+
+.
+ 
+\end_layout
+
+\begin_layout Standard
+Block inverting the matrix 
+\begin_inset Formula $D$
+\end_inset
+
+, the prices of the pre-merger products in the first iteration of the fixed
+ point algorithm is: 
+\begin_inset Formula 
+\[
+p_{1}=(1-e_{1})c_{1}-\text{\ensuremath{\left(D_{11}-D_{12}D_{22}^{-1}D_{21}\right)}}^{-1}q_{1}-D_{11}^{-1}D_{12}\text{\ensuremath{\left(-D_{22}+D_{21}D_{11}^{-1}D_{12}\right)}}^{-1}q_{2}
+\]
+
+\end_inset
+
+The difference between UPP and the first iteration for firm 1 is that for
+ the new products, UPP takes the prices as given by the pre-merger level,
+ whereas the first stage fixed point calculates these as being optimal given
+ the prices of other firms.
+ 
+\end_layout
+
+\begin_layout Standard
+The difference between these expressions are given by the second terms within
+ the two parenthesises with inverses (
+\begin_inset Formula $D_{12}D_{22}^{-1}D_{21}$
+\end_inset
+
+ and 
+\begin_inset Formula $D_{21}D_{11}^{-1}D_{12}$
+\end_inset
+
+).
+ This can be seen as follows.
+ Setting these to zero and using the fact that the pre-merger FOC for products
+ 2 can be written as 
+\begin_inset Formula 
+\[
+\mbox{D_{22}\left(p_{2}-c_{2}\right)}=-q_{2}
+\]
+
+\end_inset
+
+we get the UPP equation above.
+\end_layout
+
+\begin_layout Subsection
+Average UPP
+\end_layout
+
+\begin_layout Standard
+Assuming that firm 1 has the same marginal costs for all products 
+\begin_inset Formula $c_{1}=\bar{c}_{1}i_{1}$
+\end_inset
+
+, and firm 2 has the same markup 
+\begin_inset Formula $\bar{m}_{2}i_{2}=p_{2}-c_{2}$
+\end_inset
+
+ on all products, where
+\begin_inset Formula $i_{k}$
+\end_inset
+
+ is a column vector of ones corresponding to the number of products of firm
+ 
+\begin_inset Formula $k$
+\end_inset
+
+, we can define the vector:
+\begin_inset Formula 
+\[
+-\frac{\left(i_{1}'D_{11}i_{1}\right)}{J_{1}}\bar{c}_{1}e_{1}-\frac{\left(i_{1}'D_{12}i_{2}\right)}{J_{1}}\bar{m}_{2}
+\]
+
+\end_inset
+
+where 
+\begin_inset Formula $J_{1}$
+\end_inset
+
+ is the number of products of firm 1.
+ Under these assumptions we can get an average UPP that depends on a scalar
+ diversion ratio.
+ 
+\begin_inset Formula 
+\[
+AUPP_{12}=-\bar{c}_{1}e_{1}-\frac{\left(i_{1}'D_{12}i_{2}\right)}{\left(i_{1}'D_{11}i_{1}\right)}\bar{m_{2}}=-\bar{c}_{1}e_{1}-\frac{\left(i_{1}'D_{12}i_{2}\right)}{\left(i_{1}'D_{11}i_{1}\right)}\bar{m}_{2}
+\]
+
+\end_inset
+
+We can then define the diversion ratio as
+\begin_inset Formula 
+\[
+Div_{12}=-\frac{i_{1}'D_{12}i_{2}}{i_{1}'D_{11}i_{1}}
+\]
+
+\end_inset
+
+Both 
+\begin_inset Formula $UPP_{12}$
+\end_inset
+
+ and 
+\begin_inset Formula $AUPP_{12}$
+\end_inset
+
+ correspond to the single market 
+\begin_inset Formula $UPP_{12}$
+\end_inset
+
+ when both firms 1 and 2 are single product firms.
+ Note that 
+\begin_inset Formula 
+\[
+Div_{12}=-\frac{i_{1}'\Delta q\left(p\right)i_{2}}{i_{1}'\Delta q\left(p\right)i_{1}}
+\]
+
+\end_inset
+
+ if vectors 
+\begin_inset Formula $i_{k}$
+\end_inset
+
+ are redefined as containing 1 if product 
+\begin_inset Formula $j$
+\end_inset
+
+ belongs to 
+\begin_inset Formula $k$
+\end_inset
+
+, otherwise 0.
+ 
+\end_layout
+
+\begin_layout Section
+Nested logit derivations 
+\begin_inset CommandInset label
+LatexCommand label
+name "sec:Nested-logit-derivations"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+This section presents derivations for share jacobians and log share values
+ used in estimation,.
+ for the two- and three-level nested logit demand specification.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+I_{j}=\exp\left(\delta_{j}/\left(1-\sigma_{h}\right)\right)
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+I_{h(j)}=\sum_{k\in H_{j}}I_{k}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+I_{g(j)}=\sum_{h\in G_{j}}\left(I_{h(j)}^{1-\sigma_{h}}\right)^{\frac{1}{1-\sigma_{g}}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+I=\sum_{g\in G}I_{g}^{1-\sigma_{g}}
+\]
+
+\end_inset
+
+Shares in a two level nested logit are given by:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{equation}
+s_{j}=\frac{\exp\left(\delta_{j}/\left(1-\sigma_{h}\right)\right)}{I_{h(j)}}\frac{\left(I_{h(j)}^{1-\sigma_{h}}\right)^{\frac{1}{1-\sigma_{g}}}}{I_{g(j)}}\frac{I_{g(j)}^{1-\sigma_{g}}}{1+I}\label{eq:share}
+\end{equation}
+
+\end_inset
+
+Note that considering an outer 
+\begin_inset Formula $\sigma_{f}=0$
+\end_inset
+
+ makes the equation symmetric in each fraction above.
+ Summing products of the subgroup 
+\begin_inset Formula $h(j)$
+\end_inset
+
+ we get the share of the subgroup:
+\begin_inset Formula 
+\begin{equation}
+s_{h(j)}=\frac{\left(I_{h(j)}^{1-\sigma_{h}}\right)^{\frac{1}{1-\sigma_{g}}}}{I_{g(j)}}\frac{I_{g(j)}^{1-\sigma_{g}}}{1+I}\label{eq:share-subgroup}
+\end{equation}
+
+\end_inset
+
+Similarly
+\begin_inset Formula 
+\begin{equation}
+s_{g(j)}=\frac{I_{g(j)}^{1-\sigma_{g}}}{1+I}\label{eq:share-subgroup-1}
+\end{equation}
+
+\end_inset
+
+Thus 
+\begin_inset Formula 
+\[
+s_{j}=\frac{s_{j}}{s_{h(j)}}\frac{s_{h(j)}}{s_{g(j)}}s_{g(j)}=s_{jh}s_{hg}s_{g}
+\]
+
+\end_inset
+
+By dividing the previous equations we obtain the share of subgroup 
+\begin_inset Formula $h(j)$
+\end_inset
+
+ of the group 
+\begin_inset Formula $g(j)$
+\end_inset
+
+ that it belongs to: 
+\begin_inset Formula 
+\[
+s_{hg}=\frac{\left(I_{h(j)}^{1-\sigma_{h}}\right)^{\frac{1}{1-\sigma_{g}}}}{I_{g(j)}}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Two level nested Jacobian
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\frac{dI_{h(j)}}{d\delta_{j}}=\frac{1}{1-\sigma_{h}}I_{j}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\frac{dI_{h(j)}}{d\delta_{j}}I_{h(j)}^{-1}=\frac{1}{1-\sigma_{h}}s_{jh}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+I_{g(j)}=\sum_{h\in G_{j}}\left(I_{h(j)}\right)^{\frac{1-\sigma_{h}}{1-\sigma_{g}}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\frac{dI_{g(j)}}{d\delta_{j}}=\frac{1-\sigma_{h}}{1-\sigma_{g}}\left(I_{h(j)}\right)^{\frac{1-\sigma_{h}}{1-\sigma_{g}}}I_{h(j)}^{-1}\frac{dI_{h(j)}}{d\delta_{j}}=\frac{1}{1-\sigma_{g}}s_{jh}\left(I_{h(j)}\right)^{\frac{1-\sigma_{h}}{1-\sigma_{g}}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\frac{dI_{g(j)}}{d\delta_{j}}I_{g(j)}^{-1}=\frac{1}{1-\sigma_{g}}s_{jh}s_{hg}=\frac{1}{1-\sigma_{g}}s_{jg}
+\]
+
+\end_inset
+
+from the definition of 
+\begin_inset Formula $s_{hg}$
+\end_inset
+
+ above.
+\end_layout
+
+\begin_layout Standard
+To reduce the number of terms in taking derivatives we rewrite
+\begin_inset Formula 
+\[
+s_{j}=\exp\left(\delta_{j}/\left(1-\sigma_{h}\right)\right)\left[\left(I_{h(j)}^{1-\sigma_{h}}\right)^{\left(\frac{1}{1-\sigma_{g}}-\frac{1}{1-\sigma_{h}}\right)}\right]\left[I_{g(j)}^{-\sigma_{g}}\right]\frac{1}{1+I}
+\]
+
+\end_inset
+
+Let 
+\begin_inset Formula $F_{i}\left(\delta_{j}\right)$
+\end_inset
+
+ denote each of the four terms in this product.
+ Then 
+\begin_inset Formula 
+\[
+\frac{\partial F_{1}\left(\delta_{j}\right)}{\partial\delta_{j}}=\frac{1}{1-\sigma_{h}}F_{1}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\frac{\partial F_{2}\left(\delta_{j}\right)}{\partial\delta_{j}}=\frac{\partial I_{h(j)}}{\partial\delta_{j}}\left(1-\sigma_{h}\right)\left(\frac{1}{1-\sigma_{g}}-\frac{1}{1-\sigma_{h}}\right)I_{h(j)}^{-1}F_{2}
+\]
+
+\end_inset
+
+Using the derivative 
+\begin_inset Formula $\frac{dI_{h(j)}}{d\delta_{j}}I_{h(j)}^{-1}$
+\end_inset
+
+ above: 
+\begin_inset Formula 
+\[
+\frac{\partial F_{2}\left(\delta_{j}\right)}{\partial\delta_{j}}=s_{jh}\left(\frac{1}{1-\sigma_{g}}-\frac{1}{1-\sigma_{h}}\right)F_{2}
+\]
+
+\end_inset
+
+Using the derivative 
+\begin_inset Formula $\frac{dI_{g(j)}}{d\delta_{j}}I_{g(j)}^{-1}$
+\end_inset
+
+ above:
+\begin_inset Formula 
+\[
+\frac{\partial F_{3}\left(\delta_{j}\right)}{\partial\delta_{j}}=-\sigma_{g}\frac{\partial I_{g(j)}}{\partial\delta_{j}}I_{g(j)}^{-1}F_{3}=\frac{-\sigma_{g}}{1-\sigma_{g}}s_{jg}F_{3}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\frac{\partial F_{4}\left(\delta_{j}\right)}{\partial\delta_{j}}=-\left(1-\sigma_{g}\right)I_{g(j)}^{1-\sigma_{g}}I_{g(j)}^{-1}\frac{\partial I_{g(j)}}{\partial\delta_{j}}F_{4}^{2}=-s_{jg}\left(I_{g(j)}^{1-\sigma_{g}}F_{4}\right)F_{4}=-s_{j}F_{4}
+\]
+
+\end_inset
+
+The share derivative is given by the product rule:
+\begin_inset Formula 
+\[
+\frac{\partial s_{j}}{\partial\delta_{j}}=\sum_{i=1}^{4}\left(\frac{\partial F_{i}\left(\delta_{j}\right)}{\partial\delta_{j}}\prod_{k\neq i}F_{k}\right)
+\]
+
+\end_inset
+
+As each 
+\begin_inset Formula $\frac{\partial F_{i}}{\partial\delta_{j}}$
+\end_inset
+
+ contains 
+\begin_inset Formula $F_{i}$
+\end_inset
+
+, we can factor out the product 
+\begin_inset Formula $s_{j}$
+\end_inset
+
+, and obtain 
+\begin_inset Formula 
+\[
+\frac{\partial s_{j}}{\partial\delta_{j}}=\left(\frac{1}{1-\sigma_{h}}-\left(\frac{1}{1-\sigma_{h}}-\frac{1}{1-\sigma_{g}}\right)s_{jh}-\frac{\sigma_{g}}{1-\sigma_{g}}s_{jg}-s_{j}\right)s_{j}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Three level nest jacobian
+\end_layout
+
+\begin_layout Standard
+To reduce the number of terms in taking derivatives we rewrite
+\begin_inset Formula 
+\[
+s_{j}=\exp\left(\delta_{j}/\left(1-\sigma_{h}\right)\right)\left[\left(I_{h(j)}\right)^{\frac{1-\sigma_{h}}{1-\sigma_{g}}-1}\right]\left[\left(I_{g(j)}\right)^{\frac{1-\sigma_{g}}{1-\sigma_{f}}-1}\right]\left[I_{f(j)}^{-\sigma_{f}}\right]\frac{1}{1+I}
+\]
+
+\end_inset
+
+Let 
+\begin_inset Formula $F_{i}\left(\delta_{j}\right)$
+\end_inset
+
+ denote each of the five terms in this product.
+ Then 
+\begin_inset Formula $F_{1}$
+\end_inset
+
+ and 
+\begin_inset Formula $F_{2}$
+\end_inset
+
+ are defined as above with 
+\begin_inset Formula 
+\[
+\frac{\partial F_{1}\left(\delta_{j}\right)}{\partial\delta_{j}}=\frac{1}{1-\sigma_{h}}F_{1}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\frac{\partial F_{2}\left(\delta_{j}\right)}{\partial\delta_{j}}=s_{jh}\left(\frac{1}{1-\sigma_{g}}-\frac{1}{1-\sigma_{h}}\right)F_{2}
+\]
+
+\end_inset
+
+We can calculate the derivative 
+\begin_inset Formula $\frac{dI_{m(j)}}{d\delta_{j}}I_{m(j)}^{-1}$
+\end_inset
+
+ as above:
+\begin_inset Formula 
+\[
+I_{f(j)}=\sum_{h\in F_{j}}\left(I_{g(j)}\right)^{\frac{1-\sigma_{g}}{1-\sigma_{f}}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\frac{dI_{f(j)}}{d\delta_{j}}=\frac{1-\sigma_{g}}{1-\sigma_{f}}\left(I_{g(j)}\right)^{\frac{1-\sigma_{g}}{1-\sigma_{f}}}I_{g(j)}^{-1}\frac{dI_{g(j)}}{d\delta_{j}}=\frac{1}{1-\sigma_{f}}s_{jg}\left(I_{g(j)}\right)^{\frac{1-\sigma_{g}}{1-\sigma_{f}}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\frac{dI_{f(j)}}{d\delta_{j}}I_{f(j)}^{-1}=\frac{1}{1-\sigma_{f}}s_{jf}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\frac{\partial F_{2}\left(\delta_{j}\right)}{\partial\delta_{j}}=\frac{\partial I_{h(j)}}{\partial\delta_{j}}\left(1-\sigma_{h}\right)\left(\frac{1}{1-\sigma_{g}}-\frac{1}{1-\sigma_{h}}\right)I_{h(j)}^{-1}F_{2}
+\]
+
+\end_inset
+
+ 
+\begin_inset Formula 
+\[
+\frac{\partial F_{2}\left(\delta_{j}\right)}{\partial\delta_{j}}=s_{jh}\left(\frac{1}{1-\sigma_{g}}-\frac{1}{1-\sigma_{h}}\right)F_{2}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\frac{\partial F_{3}\left(\delta_{j}\right)}{\partial\delta_{j}}=s_{jg}\left(\frac{1}{1-\sigma_{f}}-\frac{1}{1-\sigma_{g}}\right)F_{3}
+\]
+
+\end_inset
+
+Changing index
+\begin_inset Formula 
+\[
+\frac{\partial F_{4}\left(\delta_{j}\right)}{\partial\delta_{j}}=-\sigma_{f}\frac{\partial I_{f(j)}}{\partial\delta_{j}}I_{f(j)}^{-1}F_{4}=\frac{-\sigma_{f}}{1-\sigma_{f}}s_{jf}F_{4}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\frac{\partial F_{5}\left(\delta_{j}\right)}{\partial\delta_{j}}=-\left(1-\sigma_{f}\right)I_{f(j)}^{1-\sigma_{f}}I_{f(j)}^{-1}\frac{\partial I_{f(j)}}{\partial\delta_{j}}F_{5}^{2}=-s_{jf}\left(I_{f(j)}^{1-\sigma_{f}}F_{5}\right)F_{5}=-s_{j}F_{5}
+\]
+
+\end_inset
+
+The share derivative is given by the product rule:
+\begin_inset Formula 
+\[
+\frac{\partial s_{j}}{\partial\delta_{j}}=\sum_{i=1}^{5}\left(\frac{\partial F_{i}\left(\delta_{j}\right)}{\partial\delta_{j}}\prod_{k\neq i}F_{k}\right)
+\]
+
+\end_inset
+
+Insering the definitions of 
+\begin_inset Formula $F_{i}$
+\end_inset
+
+ and 
+\begin_inset Formula $\frac{\partial F_{i}\left(\delta_{j}\right)}{\partial\delta_{j}}$
+\end_inset
+
+ and simplifying, we obtain 
+\begin_inset Formula 
+\begin{equation}
+\frac{\partial s_{j}}{\partial\delta_{j}}=\left(\frac{1}{1-\sigma_{h}}-\left(\frac{1}{1-\sigma_{h}}-\frac{1}{1-\sigma_{g}}\right)s_{jh}-\left(\frac{1}{1-\sigma_{g}}-\frac{1}{1-\sigma_{f}}\right)s_{jg}-\frac{\sigma_{f}}{1-\sigma_{f}}s_{jf}-s_{j}\right)s_{j}\label{eq:jacobian3}
+\end{equation}
+
+\end_inset
+
+(As each 
+\begin_inset Formula $\frac{\partial F_{i}}{\partial\delta_{j}}$
+\end_inset
+
+ contains 
+\begin_inset Formula $F_{i}$
+\end_inset
+
+, we can factor out the product 
+\begin_inset Formula $s_{j}=\prod_{k}F_{k}$
+\end_inset
+
+.)
+\end_layout
+
+\begin_layout Subsection
+Log-share Parameters Used in Estimation
+\end_layout
+
+\begin_layout Standard
+To obtain the three level linear equation to estimate, start from the share
+ equation (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:share"
+
+\end_inset
+
+)
+\begin_inset Formula 
+\[
+s_{j}=\frac{\exp\left(\delta_{j}/\left(1-\sigma_{h}\right)\right)}{I_{h(j)}}\frac{\left(I_{h(j)}^{1-\sigma_{h}}\right)^{\frac{1}{1-\sigma_{g}}}}{I_{g(j)}}\frac{I_{g(j)}^{1-\sigma_{g}}}{1+I}
+\]
+
+\end_inset
+
+ above
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+s_{j}/s_{0}=\frac{\exp\left(\delta_{j}/\left(1-\sigma_{h}\right)\right)}{I_{h(j)}}\frac{\left(I_{h(j)}^{1-\sigma_{h}}\right)^{\frac{1}{1-\sigma_{g}}}}{I_{g(j)}}I_{g(j)}^{1-\sigma_{g}}
+\]
+
+\end_inset
+
+Using 
+\begin_inset Formula 
+\[
+\exp\left(\delta_{j}/\left(1-\sigma_{h}\right)\right)=\exp\left(\delta_{j}\right)\exp\left(\delta_{j}\frac{\sigma_{h}}{1-\sigma_{h}}\right)
+\]
+
+\end_inset
+
+we get
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+s_{j}/s_{0}=\exp\left(\delta_{j}\right)\exp\left(\delta_{j}\frac{\sigma_{h}}{1-\sigma_{h}}\right)\left(I_{h(j)}\right)^{\frac{1-\sigma_{h}}{1-\sigma_{g}}-1}I_{g(j)}^{-\sigma_{g}}
+\]
+
+\end_inset
+
+Multiplying by 
+\begin_inset Formula $I_{h(j)}^{-\sigma_{h}}I_{h(j)}^{\sigma_{h}}$
+\end_inset
+
+
+\begin_inset Formula 
+\[
+s_{j}/s_{0}=\exp\left(\delta_{j}\right)\left[\exp\left(\frac{\delta_{j}}{1-\sigma_{h}}\right)I_{h(j)}^{-1}\right]^{\sigma_{h}}I_{h(j)}^{\sigma_{h}}\left(I_{h(j)}\right)^{\frac{1-\sigma_{h}}{1-\sigma_{g}}-1}I_{g(j)}^{-\sigma_{g}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+s_{j}/s_{0}=\exp\left(\delta_{j}\right)\left[\exp\left(\frac{\delta_{j}}{1-\sigma_{h}}\right)I_{h(j)}^{-1}\right]^{\sigma_{h}}\left[\left(I_{h(j)}^{1-\sigma_{h}}\right)^{\frac{1}{1-\sigma_{g}}}I_{g(j)}^{-1}\right]^{\sigma_{g}}
+\]
+
+\end_inset
+
+Substituting the definitions
+\begin_inset Formula 
+\[
+s_{j}/s_{0}=\exp\left(\delta_{j}\right)s_{jh}^{\sigma_{h}}s_{hg}^{\sigma_{g}}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The population equation to be estimated is given by
+\begin_inset Formula 
+\[
+\log\left(s_{j}/s_{0}\right)=\delta_{j}+\sigma_{h}\log s_{jh}+\sigma_{g}\log s_{hg}
+\]
+
+\end_inset
+
+Note that whereas the share jacobian is a function of 
+\begin_inset Formula $s_{jh}$
+\end_inset
+
+ and 
+\begin_inset Formula $s_{jg}$
+\end_inset
+
+, the variables used in estimation are 
+\begin_inset Formula $s_{jh}$
+\end_inset
+
+ and 
+\begin_inset Formula $s_{hg}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Subsubsection
+Three level nests
+\end_layout
+
+\begin_layout Standard
+In the three level nestm the corresponding equation to (
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:share"
+
+\end_inset
+
+) is given by
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+s_{j}=\exp\left(\delta_{j}/\left(1-\sigma_{h}\right)\right)\left[\left(I_{h(j)}\right)^{\frac{1-\sigma_{h}}{1-\sigma_{g}}-1}\right]\left[\left(I_{g(j)}\right)^{\frac{1-\sigma_{g}}{1-\sigma_{f}}-1}\right]\left[I_{f(j)}^{-\sigma_{f}}\right]\frac{1}{1+I}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+s_{j}=\frac{\exp\left(\delta_{j}/\left(1-\sigma_{h}\right)\right)}{I_{h(j)}}\frac{\left(I_{h(j)}^{1-\sigma_{h}}\right)^{\frac{1}{1-\sigma_{g}}}}{I_{g(j)}}\frac{\left(I_{g(j)}^{1-\sigma_{g}}\right)^{\frac{1}{1-\sigma_{f}}}}{I_{f(j)}}\frac{I_{f(j)}^{1-\sigma_{f}}}{1+I}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+s_{j}/s_{0}=\exp\left(\delta_{j}\right)\exp\left(\delta_{j}\frac{\sigma_{h}}{1-\sigma_{h}}\right)\left(I_{h(j)}\right)^{\frac{1-\sigma_{h}}{1-\sigma_{g}}-1}\left(I_{g(j)}\right)^{\frac{1-\sigma_{g}}{1-\sigma_{f}}-1}I_{f(j)}^{-\sigma_{f}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+s_{j}/s_{0}=\exp\left(\delta_{j}\right)\left[\exp\left(\delta_{j}\frac{\sigma_{h}}{1-\sigma_{h}}\right)I_{h(j)}^{-\sigma_{h}}\right]I_{h(j)}^{\sigma_{h}}\left(I_{h(j)}\right)^{\frac{1-\sigma_{h}}{1-\sigma_{g}}-1}\left(I_{g(j)}\right)^{\frac{1-\sigma_{g}}{1-\sigma_{f}}-1}I_{f(j)}^{-\sigma_{f}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+s_{j}/s_{0}=\exp\left(\delta_{j}\right)\left[\exp\left(\delta_{j}\frac{1}{1-\sigma_{h}}\right)I_{h(j)}^{-1}\right]^{\sigma_{h}}\left[\left(I_{h(j)}^{1-\sigma_{h}}\right)^{\frac{1}{1-\sigma_{g}}}I_{g(j)}^{-1}\right]^{\sigma_{g}}\left[\left(I_{g(j)}^{1-\sigma_{g}}\right)^{\frac{1}{1-\sigma_{f}}}I_{f(j)}^{-1}\right]^{\sigma_{f}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+s_{j}/s_{0}=\exp\left(\delta_{j}\right)s_{jh}^{\sigma_{h}}s_{hg}^{\sigma_{g}}s_{gf}^{\sigma_{f}}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Thus the equation to be estimatedis given by 
+\begin_inset Formula 
+\[
+\log\left(s_{j}/s_{0}\right)=\delta_{j}+\sigma_{h}\log s_{jh}+\sigma_{g}\log s_{hg}+\sigma_{f}\log s_{gf}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Elasticities
+\begin_inset CommandInset label
+LatexCommand label
+name "sec:Elasticities"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+This section contains the analysis of nested logit demand and elasticities.
+ To calibrate nested logit model from elasticities, the functional dependence
+ of parameters 
+\begin_inset Formula $\alpha$
+\end_inset
+
+ and 
+\begin_inset Formula $\sigma_{i}$
+\end_inset
+
+ on these elasticities have to be derived.
+ Expressions for group elasticites, used in mergersim market are also presented.
+ Note that calibration from elasticites in the three level nested logit
+ are not supported yet.
+\end_layout
+
+\begin_layout Subsection
+Calibration from elasticities
+\end_layout
+
+\begin_layout Standard
+With a one level nested logit, elasticities calculated from quantities are
+ given by:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+e_{jj}=\alpha\left(\frac{1}{1-\sigma}-\frac{\sigma}{1-\sigma}\frac{q_{j}}{q_{g_{j}}}-\frac{q_{j}}{m_{1}}\right)p_{j}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+e_{jk}=-\alpha\left(\frac{\sigma}{1-\sigma}\frac{q_{j}}{q_{g_{j}}}+\frac{q_{j}}{m_{1}}\right)p_{j}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Define 
+\begin_inset Formula $\bar{v}=\frac{1}{J}\sum_{j}p_{j}q_{j}$
+\end_inset
+
+ and 
+\begin_inset Formula $\bar{z}=\frac{1}{J}\sum_{j}\frac{p_{j}q_{j}}{q_{g(j)}}=\frac{1}{J}\sum_{g\in G}\frac{\bar{v}_{g}}{\bar{q}_{g}}.$
+\end_inset
+
+ Unweighted average elasticities are then 
+\begin_inset Formula 
+\[
+\bar{e}_{jj}=\alpha\left(\frac{1}{1-\sigma}\bar{p}-\frac{\sigma}{1-\sigma}\bar{z}-\frac{1}{m_{1}}\bar{v}\right)
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\bar{e}_{jk}=-\alpha\left(\frac{\sigma}{1-\sigma}\bar{z}+\frac{1}{m_{1}}\bar{v}\right)
+\]
+
+\end_inset
+
+Defining 
+\begin_inset Formula $\bar{p}$
+\end_inset
+
+, 
+\begin_inset Formula $A$
+\end_inset
+
+ and 
+\begin_inset Formula $B$
+\end_inset
+
+ as the three sums above 
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+C_{1}=\frac{\alpha}{1-\sigma}=\frac{\bar{e}_{jj}-\bar{e}_{jk}}{\bar{p}}
+\]
+
+\end_inset
+
+and thus
+\begin_inset Formula 
+\[
+\bar{e}_{jk}=-\sigma C_{1}\bar{z}-\left(1-\sigma\right)C_{1}\bar{z}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\bar{e}_{jk}+C_{1}\bar{v}=\sigma C_{1}\left(\bar{v}-\bar{z}\right)
+\]
+
+\end_inset
+
+The one level nested logit parameters can thus be expressed in terms of
+ shares
+\begin_inset Formula 
+\[
+\sigma=\frac{\bar{e}_{jk}/C_{1}+\bar{v}}{\bar{v}-\bar{z}}=\left(1-\frac{\bar{p}}{\bar{v}}\frac{\bar{e}_{jk}}{\bar{e}_{jk}-\bar{e}_{jj}}\right)\frac{\bar{v}}{\bar{v}-\bar{z}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\alpha=\left(1-\sigma\right)C_{1}=\frac{C_{1}\bar{z}-\bar{e}_{jk}}{\bar{v}-\bar{z}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+-\alpha=\frac{\bar{e}_{jk}}{\bar{v}-\bar{z}}\left(1+\frac{\bar{e}_{jj}-\bar{e}_{jk}}{\bar{e}_{jk}}\frac{\bar{z}}{\bar{p}}\right)
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsubsection
+Two level nests
+\end_layout
+
+\begin_layout Standard
+Basing calculations on shares in the two level unit demand logit, we have:
+ 
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\bar{e}_{jj}=\alpha\left(\frac{1}{1-\sigma_{1}}\bar{p}-\left(\frac{1}{1-\sigma_{1}}-\frac{1}{1-\sigma_{2}}\right)p\cdot s_{hg}/J-\frac{\sigma_{2}}{1-\sigma_{2}}p\cdot s_{g}/J-p\cdot s/J\right)
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\bar{e}_{jk}=-\alpha\left(\left(\frac{1}{1-\sigma_{1}}-\frac{1}{1-\sigma_{2}}\right)p\cdot s_{hg}/J+\frac{\sigma_{2}}{1-\sigma_{2}}p\cdot s_{g}/J+p\cdot s/J\right)
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\bar{e}_{jl}=-\alpha\left(\frac{\sigma_{2}}{1-\sigma_{2}}p\cdot s_{hg}/J+p\cdot s/J\right)
+\]
+
+\end_inset
+
+Let 
+\begin_inset Formula $Z_{g}=p\cdot s_{g}/J$
+\end_inset
+
+, 
+\begin_inset Formula $Z_{hg}=p\cdot s_{hg}/J$
+\end_inset
+
+, and 
+\begin_inset Formula $Z_{j}=p\cdot s/J$
+\end_inset
+
+.
+ 
+\begin_inset Formula 
+\[
+\bar{e}_{jj}=\alpha\left(\frac{1}{1-\sigma_{1}}\bar{p}-\left(\frac{1}{1-\sigma_{1}}-\frac{1}{1-\sigma_{2}}\right)Z_{hg}-\frac{\sigma_{2}}{1-\sigma_{2}}Z_{g}-Z_{j}\right)
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+We now have
+\begin_inset Formula 
+\[
+C_{1}=\frac{\alpha}{1-\sigma_{1}}=\frac{\bar{e}_{jj}-\bar{e}_{jk}}{\bar{p}}
+\]
+
+\end_inset
+
+and 
+\begin_inset Formula 
+\[
+\bar{e}_{jl}-\bar{e}_{jk}=\alpha\left(\frac{1}{1-\sigma_{1}}-\frac{1}{1-\sigma_{2}}\right)Z_{hg}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\bar{e}_{jl}-\bar{e}_{jk}=\left(C_{1}-\frac{\text{\alpha}}{1-\sigma_{2}}\right)Z_{hg}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+C_{2}=\frac{\text{\alpha}}{1-\sigma_{2}}=C_{1}-\frac{\bar{e}_{jl}-\bar{e}_{jk}}{Z_{hg}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\bar{e}_{jl}=-\sigma_{2}\frac{\alpha}{1-\sigma_{2}}Z_{g}-\frac{\alpha}{1-\sigma_{2}}\left(1-\sigma_{2}\right)Z_{j}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\bar{e}_{jl}=-\sigma_{2}C_{2}Z_{g}-C_{2}\left(1-\sigma_{2}\right)Z_{j}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\bar{e}_{jl}/C_{2}+Z_{j}=-\sigma_{2}Z_{gg}+\sigma_{2}Z_{j}
+\]
+
+\end_inset
+
+Thus the solution is
+\begin_inset Formula 
+\[
+\sigma_{2}=\frac{\bar{e}_{jl}/C_{2}-Z_{j}}{Z_{j}-Z_{g}}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\text{\alpha}=\left(1-\sigma_{2}\right)C_{2}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\text{\alpha}=\left(1-\sigma_{1}\right)C_{1}=\left(1-\sigma_{2}\right)C_{2}
+\]
+
+\end_inset
+
+
+\begin_inset Formula 
+\[
+\sigma_{1}=1-\frac{\left(1-\sigma_{2}\right)C_{2}}{C_{1}}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsubsection
+CES
+\end_layout
+
+\begin_layout Standard
+For CES demand, the 
+\begin_inset Formula $C_{1}$
+\end_inset
+
+ and 
+\begin_inset Formula $Z_{*}$
+\end_inset
+
+ parameters above have to be modified as follows
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\bar{e}_{jj}=\alpha\left(\frac{1}{1-\sigma_{1}}-\left(\frac{1}{1-\sigma_{1}}-\frac{1}{1-\sigma_{2}}\right)s_{hg}/J-\frac{\sigma_{2}}{1-\sigma_{2}}s_{g}/J-s/J\right)-1
+\]
+
+\end_inset
+
+In this case 
+\begin_inset Formula 
+\[
+C_{1}=\bar{e}_{jj}-\bar{e}_{jk}+1=\frac{\alpha}{1-\sigma}
+\]
+
+\end_inset
+
+Also 
+\begin_inset Formula $Z_{jh}=\sum_{j}s_{jh}/J$
+\end_inset
+
+, 
+\begin_inset Formula $Z_{hg}=\sum_{j}s_{hg}/J$
+\end_inset
+
+, and 
+\begin_inset Formula $Z_{j}=\sum_{j}s_{j}/J$
+\end_inset
+
+.
+ In the formulas above 
+\begin_inset Formula $\bar{p}$
+\end_inset
+
+ is replaced with 1.
+\end_layout
+
+\begin_layout Subsection
+Group elasticities
+\begin_inset CommandInset label
+LatexCommand label
+name "subsec:Group-elasticities"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Product level elasticities are given by
+\begin_inset Note Note
+status open
+
+\begin_layout Plain Layout
+Why transpose?
+\end_layout
+
+\end_inset
+
+ 
+\begin_inset Formula 
+\[
+e_{ij}=p_{j}\frac{\partial s_{i}}{\partial p_{j}}\frac{1}{s_{i}}
+\]
+
+\end_inset
+
+In matrix form, the product elasticities can be expressed in terms of the
+ share Jacobian 
+\begin_inset Formula $D$
+\end_inset
+
+ as:
+\begin_inset Formula 
+\[
+E=\hat{p}D'\hat{s}^{-1}
+\]
+
+\end_inset
+
+where the 
+\begin_inset Formula $\hat{\:}$
+\end_inset
+
+-operator is used to indicate diagonalizing a vector.
+ 
+\end_layout
+
+\begin_layout Standard
+We define group elasticities in terms of the effect of a proportional change
+ of all prices 
+\begin_inset Formula $\delta_{h}p_{h}=\frac{1}{N_{h}}\sum_{i}p_{i}\delta$
+\end_inset
+
+ on shares 
+\begin_inset Formula $s_{g}=\sum_{i}s_{i}$
+\end_inset
+
+.
+ Taking derivatives wrt to 
+\begin_inset Formula $\delta_{h}$
+\end_inset
+
+ for 
+\begin_inset Formula $\delta_{h}=1$
+\end_inset
+
+, we get
+\begin_inset Formula 
+\[
+\left.\frac{\partial p_{j}}{\partial\delta}\right|_{\delta_{h}=1}=1_{h}\left(j\right)p_{j}
+\]
+
+\end_inset
+
+where 
+\begin_inset Formula $1_{h}\left(j\right)=1$
+\end_inset
+
+ if 
+\begin_inset Formula $j$
+\end_inset
+
+ is in group 
+\begin_inset Formula $h$
+\end_inset
+
+, and 
+\begin_inset Formula $0$
+\end_inset
+
+ otherwise.
+ 
+\begin_inset Formula 
+\[
+e_{gh}=\frac{1}{s_{g}}\frac{\partial s_{g}}{\partial\delta_{h}}=\frac{1}{s_{g}}\sum_{i\in N_{g}}\sum_{j\in N_{h}}\frac{\partial s_{i}}{\partial p_{j}}1_{h}\left(j\right)p_{j}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Group elasticities are calculated based on a categorical variable that defines
+ which group a product belongs to.
+ The variable is transformed to a 
+\begin_inset Formula $g\times n$
+\end_inset
+
+ group membership matrix 
+\begin_inset Formula $G$
+\end_inset
+
+, where element 
+\begin_inset Formula $\left(i,j\right)$
+\end_inset
+
+ is 1 if product 
+\begin_inset Formula $j$
+\end_inset
+
+ is in group 
+\begin_inset Formula $i$
+\end_inset
+
+.
+ The group elasticities can be expressed in matrix form by
+\begin_inset Formula 
+\[
+E=G\hat{p}D'G'\widehat{Gs}^{-1}
+\]
+
+\end_inset
+
+where the diagonal matrix 
+\begin_inset Formula $\widehat{Gs}^{-1}$
+\end_inset
+
+ corresponds to the 
+\begin_inset Formula $\frac{1}{s_{g}}$
+\end_inset
+
+ term above.
+\end_layout
+
+\end_body
+\end_document
